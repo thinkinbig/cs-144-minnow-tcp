@@ -2,6 +2,8 @@
 
 #include "byte_stream.hh"
 
+#include <set>
+
 class Reassembler
 {
 public:
@@ -42,5 +44,17 @@ public:
   const Writer& writer() const { return output_.writer(); }
 
 private:
+  struct Segment
+  {
+    uint64_t first_index;
+    std::string data;
+
+    bool operator<( const Segment& other ) const { return first_index < other.first_index; }
+    void merge_with( uint64_t other_index, const std::string& other_data );
+  };
+
+  std::set<Segment> pending_data_ {};
+  uint64_t first_unassembled_index_ {};
+  uint64_t last_byte_index_ {};
   ByteStream output_;
 };
