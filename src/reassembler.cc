@@ -22,12 +22,19 @@ void Reassembler::Segment::merge_with( uint64_t other_index, const std::string& 
   // Handle partial overlap
   if ( other_index < first_index ) {
     // New data extends to the left
-    data = other_data.substr( 0, first_index - other_index ) + data;
+    string new_data(first_index - other_index + data.size(), '\0');
+    copy(other_data.begin(), other_data.begin() + (first_index - other_index), new_data.begin());
+    copy(data.begin(), data.end(), new_data.begin() + (first_index - other_index));
+    data = std::move(new_data);
     first_index = other_index;
   }
   if ( other_index + other_data.size() > first_index + data.size() ) {
     // New data extends to the right
-    data += other_data.substr( first_index + data.size() - other_index );
+    size_t old_size = data.size();
+    data.resize(other_index + other_data.size() - first_index);
+    copy(other_data.begin() + (first_index + old_size - other_index), 
+         other_data.end(), 
+         data.begin() + old_size);
   }
 }
 
