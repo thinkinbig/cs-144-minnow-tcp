@@ -7,23 +7,28 @@ using namespace std;
 
 void Reassembler::Segment::merge_with( uint64_t other_index, const std::string& other_data )
 {
-  uint64_t start = min( first_index, other_index );
-  uint64_t end = max( first_index + data.size(), other_index + other_data.size() );
-
-  string merged( end - start, '\0' );
-
-  // Copy existing data
-  if ( first_index >= start ) {
-    copy( data.begin(), data.end(), merged.begin() + ( first_index - start ) );
+  // If new data is completely contained in existing data, no need to merge
+  if ( first_index <= other_index && first_index + data.size() >= other_index + other_data.size() ) {
+    return;
   }
 
-  // Copy new data
-  if ( other_index >= start ) {
-    copy( other_data.begin(), other_data.end(), merged.begin() + ( other_index - start ) );
+  // If new data completely contains existing data, replace it
+  if ( other_index <= first_index && other_index + other_data.size() >= first_index + data.size() ) {
+    first_index = other_index;
+    data = other_data;
+    return;
   }
 
-  data = merged;
-  first_index = start;
+  // Handle partial overlap
+  if ( other_index < first_index ) {
+    // New data extends to the left
+    data = other_data.substr( 0, first_index - other_index ) + data;
+    first_index = other_index;
+  }
+  if ( other_index + other_data.size() > first_index + data.size() ) {
+    // New data extends to the right
+    data += other_data.substr( first_index + data.size() - other_index );
+  }
 }
 
 void Reassembler::insert( uint64_t first_index, string data, bool is_last_substring )
