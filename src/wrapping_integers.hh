@@ -7,7 +7,6 @@
  *    - starts at an arbitrary "zero point" (initial value), and
  *    - wraps back to zero when it reaches 2^32 - 1.
  */
-
 class Wrap32
 {
 public:
