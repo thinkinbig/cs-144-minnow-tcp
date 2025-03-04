@@ -62,5 +62,6 @@ private:
   std::set<Segment> pending_data_ {};
   uint64_t first_unassembled_index_ {};
   uint64_t last_byte_index_ {};
+  bool eof_flag_ {};
   ByteStream output_;
 };

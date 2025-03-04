@@ -24,10 +24,10 @@ void Reassembler::Segment::merge_with( uint64_t other_index, const std::string& 
     // New data extends to the left
     const size_t prefix_size = first_index - other_index;
     string new_data;
-    new_data.reserve(prefix_size + data.size());
-    new_data.append(other_data.data(), prefix_size);
-    new_data.append(data);
-    data = std::move(new_data);
+    new_data.reserve( prefix_size + data.size() );
+    new_data.append( other_data.data(), prefix_size );
+    new_data.append( data );
+    data = std::move( new_data );
     first_index = other_index;
   }
   if ( other_index + other_data.size() > first_index + data.size() ) {
@@ -35,18 +35,19 @@ void Reassembler::Segment::merge_with( uint64_t other_index, const std::string& 
     const size_t old_size = data.size();
     const size_t suffix_start = first_index + old_size - other_index;
     const size_t suffix_size = other_data.size() - suffix_start;
-    data.append(other_data.data() + suffix_start, suffix_size);
+    data.append( other_data.data() + suffix_start, suffix_size );
   }
 }
 
 void Reassembler::insert( uint64_t first_index, string data, bool is_last_substring )
 {
   Writer& writer = output_.writer();
-  
-  assert(first_unassembled_index_ == writer.bytes_pushed());
+
+  assert( first_unassembled_index_ == writer.bytes_pushed() );
 
   if ( is_last_substring ) {
     last_byte_index_ = first_index + data.size();
+    eof_flag_ = true;
   }
 
   // Handle empty last substring
@@ -106,7 +107,7 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
   }
 
   // Close stream if we've written everything
-  if ( last_byte_index_ > 0 && first_unassembled_index_ == last_byte_index_ && pending_data_.empty() ) {
+  if ( eof_flag_ && first_unassembled_index_ == last_byte_index_ && pending_data_.empty() ) {
     writer.close();
   }
 }

@@ -1,81 +1,84 @@
 #include <cassert>
 #include <cstdint>
 
-#include "tcp_receiver.hh"
 #include "debug.hh"
+#include "tcp_receiver.hh"
 
 using namespace std;
 
 void TCPReceiver::receive( TCPSenderMessage message )
 {
-  // 1. 错误处理：RST 标志会立即终止连接
-  if (message.RST) {
+  // 1. Error handling: RST flag immediately terminates the connection
+  if ( message.RST ) {
     reassembler_.set_error();
     reassembler_.close();
     return;
   }
 
-  // 2. 连接建立：处理 SYN
-  if (!initialized_) {
-    if (!message.SYN) {
-      return;  // 未初始化时，忽略非 SYN 包
+  // 2. Connection establishment: handle SYN
+  if ( !initialized_ ) {
+    if ( !message.SYN ) {
+      return; // Ignore non-SYN segments before initialization
     }
     zero_point_ = message.seqno;
     initialized_ = true;
   }
 
-  // 3. 数据处理
+  // 3. Data processing
   uint64_t checkpoint = reassembler_.writer().bytes_pushed();
-  uint64_t stream_index = message.seqno.unwrap(zero_point_, checkpoint);
+  uint64_t stream_index = message.seqno.unwrap( zero_point_, checkpoint );
 
-  // 调整非 SYN 包的起始位置
-  if (!message.SYN) {
+  // Adjust stream index for non-SYN segments
+  if ( !message.SYN ) {
     stream_index -= 1;
   }
 
-  // 检查数据是否已经处理过
-  bool already_processed = stream_index + message.payload.size() <= reassembler_.writer().bytes_pushed();
-  bool empty_fin = message.payload.empty() && message.FIN;
-  
-  // 已处理的数据包直接丢弃，但空的 FIN 包除外
-  if (!message.SYN && already_processed && !empty_fin) {
+  // Discard already processed segments, except empty FIN
+  if ( !message.SYN && stream_index + message.payload.size() <= reassembler_.writer().bytes_pushed()
+       && !( message.payload.empty() && message.FIN ) ) {
     return;
   }
 
-  // 重组数据
-  reassembler_.insert(stream_index, message.payload, message.FIN);
+  // Reassemble data
+  reassembler_.insert( stream_index, message.payload, message.FIN );
 }
 
 TCPReceiverMessage TCPReceiver::send() const
 {
-  if (reassembler_.has_error()) {
-    return TCPReceiverMessage{
+  // Return error message if reassembler has error
+  if ( reassembler_.has_error() ) {
+    return TCPReceiverMessage {
       .ackno = {},
       .window_size = 0,
       .RST = true,
     };
   }
 
+  // Calculate window size, capped at UINT16_MAX
   uint64_t available_capacity = reassembler_.writer().available_capacity();
-  uint16_t window_size = available_capacity > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>(available_capacity);
+  uint16_t window_size = available_capacity > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>( available_capacity );
 
-  if (!initialized_) {
-    return TCPReceiverMessage{
+  // Return uninitialized message if no SYN received
+  if ( !initialized_ ) {
+    return TCPReceiverMessage {
       .ackno = {},
       .window_size = window_size,
       .RST = false,
     };
   }
 
-  // 计算下一个期望的序列号
-  uint64_t next_seqno = 1;  // SYN 占用第一个序列号
-  next_seqno += reassembler_.writer().bytes_pushed();  // 加上已推送的字节数
-  if (reassembler_.writer().is_closed()) {
-    next_seqno += 1;  // FIN 占用最后一个序列号
+  // Calculate next expected sequence number:
+  // 1. SYN occupies first sequence number
+  // 2. Add pushed bytes
+  // 3. FIN occupies last sequence number if stream is closed
+  uint64_t next_seqno = 1;                            // For SYN
+  next_seqno += reassembler_.writer().bytes_pushed(); // For data
+  if ( reassembler_.writer().is_closed() ) {
+    next_seqno += 1; // For FIN
   }
 
-  return TCPReceiverMessage{
-    .ackno = Wrap32::wrap(next_seqno, zero_point_),
+  return TCPReceiverMessage {
+    .ackno = Wrap32::wrap( next_seqno, zero_point_ ),
     .window_size = window_size,
     .RST = false,
   };

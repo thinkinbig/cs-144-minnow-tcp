@@ -28,6 +28,6 @@ public:
 
 private:
   Reassembler reassembler_;
-  Wrap32 zero_point_ {0};
-  bool initialized_ {false}; 
+  Wrap32 zero_point_ { 0 };
+  bool initialized_ { false };
 };
