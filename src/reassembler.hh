@@ -43,6 +43,12 @@ public:
   // Access output stream writer, but const-only (can't write from outside)
   const Writer& writer() const { return output_.writer(); }
 
+  void set_error() { output_.set_error(); }
+
+  bool has_error() const { return output_.has_error(); }
+
+  void close() { output_.writer().close(); }
+
 private:
   struct Segment
   {
