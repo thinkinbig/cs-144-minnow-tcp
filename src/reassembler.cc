@@ -45,6 +45,7 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
 
   assert( first_unassembled_index_ == writer.bytes_pushed() );
 
+
   if ( is_last_substring ) {
     last_byte_index_ = first_index + data.size();
     eof_flag_ = true;
@@ -68,8 +69,15 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
 
   // Handle data beyond capacity
   uint64_t first_unaccepted_index = first_unassembled_index_ + writer.available_capacity();
-  if ( first_index + data.size() > first_unaccepted_index ) {
-    data = data.substr( 0, first_unaccepted_index - first_index );
+  
+  // If the data is beyond capacity, return
+  if (first_index >= first_unaccepted_index) {
+    return;
+  }
+
+  // If the data is beyond capacity, truncate it
+  if (data.size() > first_unaccepted_index - first_index) {
+    data = data.substr(0, first_unaccepted_index - first_index);
   }
 
   if ( !data.empty() ) {
