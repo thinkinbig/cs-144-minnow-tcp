@@ -20,7 +20,7 @@ public:
 
     bool is_expired() const;
 
-    void double_RTO() { current_RTO_ms_ *= 2; }
+    void double_RTO();
 
     void increment_retransmissions() { consecutive_retransmissions_++; }
 
