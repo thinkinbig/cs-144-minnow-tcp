@@ -5,7 +5,7 @@
 
 using namespace std;
 
-void Reassembler::Segment::merge_with( uint64_t other_index, const std::string& other_data )
+void Reassembler::Segment::merge_with( uint64_t other_index, const string& other_data )
 {
   // If new data is completely contained in existing data, no need to merge
   if ( first_index <= other_index && first_index + data.size() >= other_index + other_data.size() ) {
@@ -80,25 +80,38 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
   }
 
   if ( !data.empty() ) {
-    // Handle overlapping segments
-    auto it = pending_data_.begin();
-    while ( it != pending_data_.end() ) {
-      // Check for overlap
-      if ( it->first_index < first_index + data.size() && first_index < it->first_index + it->data.size() ) {
-        // Create a new segment with merged data
-        Segment merged = *it;
+    // Create new segment
+    Segment new_segment { first_index, data };
+
+    // Find the first segment that starts after our new segment
+    auto next = pending_data_.lower_bound( new_segment );
+
+    // Find the last segment that starts before our new segment
+    auto prev = next;
+    if ( next != pending_data_.begin() ) {
+      prev = std::prev( next );
+    }
+
+    // Check and merge with previous segment if it overlaps
+    if ( prev != pending_data_.end() && prev != next ) {
+      if ( prev->first_index + prev->data.size() > first_index ) {
+        // Merge with previous segment
+        Segment merged = *prev;
         merged.merge_with( first_index, data );
-
-        // Update our working data with merged result
-        data = merged.data;
-        first_index = merged.first_index;
-
-        it = pending_data_.erase( it );
-      } else {
-        ++it;
+        new_segment = merged;
+        prev = pending_data_.erase( prev );
       }
     }
-    pending_data_.insert( Segment { first_index, data } );
+
+    // Check and merge with all following segments that overlap
+    while ( next != pending_data_.end() && next->first_index < new_segment.first_index + new_segment.data.size() ) {
+      // Merge with next segment
+      new_segment.merge_with( next->first_index, next->data );
+      next = pending_data_.erase( next );
+    }
+
+    // Insert the merged segment
+    pending_data_.insert( new_segment );
   }
 
   // Try to push contiguous data
