@@ -13,12 +13,12 @@ uint64_t TCPSender::sequence_numbers_in_flight() const
 // This function is for testing only; don't add extra state to support it.
 uint64_t TCPSender::consecutive_retransmissions() const
 {
-  return timer_.consecutive_retransmissions();
+  return timer_.consecutive_retransmissions_;
 }
 
-void TCPSender::push( const TransmitFunction& transmit )
+void TCPSender::push(const TransmitFunction& transmit)
 {
-  // First, handle SYN if not sent yet
+  // Try to send SYN first if not sent yet
   if (next_seqno_ == 0 && !syn_sent_) {
     TCPSenderMessage message {
       .seqno = isn_,
@@ -27,13 +27,20 @@ void TCPSender::push( const TransmitFunction& transmit )
       .FIN = false,
       .RST = false
     };
+
+    // Set FIN flag if input is closed and window allows
+    if (input_.writer().is_closed() && window_size_ >= 2) {  // Need space for both SYN and FIN
+      message.FIN = true;
+      fin_sent_ = true;
+    }
+
     transmit(message);
     outstanding_segments_.push_back(message);
     bytes_in_flight_ += message.sequence_length();
     next_seqno_ += message.sequence_length();
     syn_sent_ = true;
-    if (!timer_.is_running()) {
-      timer_.start(last_tick_ms_);
+    if (!timer_.running_) {
+      timer_.start();
     }
     return;
   }
@@ -43,8 +50,8 @@ void TCPSender::push( const TransmitFunction& transmit )
     return;
   }
 
-  // Calculate available window (minimum 1 for zero window probing)
-  uint64_t effective_window = window_size_ ? window_size_ : 1;
+  // Calculate window sizes
+  uint64_t effective_window = window_size_ == 0 ? 1 : window_size_;
   uint64_t window_remaining = effective_window - bytes_in_flight_;
   
   // Don't send if no window available
@@ -52,13 +59,8 @@ void TCPSender::push( const TransmitFunction& transmit )
     return;
   }
 
-  // Read data from input stream
+  // Read data and calculate payload size
   string_view data = input_.reader().peek();
-  
-  // Calculate payload size considering:
-  // 1. Available window
-  // 2. Maximum payload size
-  // 3. Available data
   uint64_t payload_size = min({
     window_remaining,
     data.size(),
@@ -74,31 +76,29 @@ void TCPSender::push( const TransmitFunction& transmit )
     .RST = false
   };
 
-  // Add FIN if:
-  // 1. Input is finished
-  // 2. FIN hasn't been sent yet
-  // 3. Window has enough space for payload + FIN
-  if (input_.reader().is_finished() && 
-      !fin_sent_ &&
+  // Try to set FIN flag if:
+  // 1. Input is closed
+  // 2. All remaining data fits in this segment
+  // 3. There's room for FIN in the window
+  if (!fin_sent_ &&  // Add this check to avoid setting FIN twice
+      input_.writer().is_closed() && 
+      input_.reader().peek().size() <= payload_size &&
       bytes_in_flight_ + payload_size + 1 <= effective_window) {
     message.FIN = true;
     fin_sent_ = true;
   }
 
-  // Only send if we have data or flags
+  // Send if we have data or flags
   if (message.sequence_length() > 0) {
-    // Update state
+    transmit(message);
+    outstanding_segments_.push_back(message);
     bytes_in_flight_ += message.sequence_length();
     next_seqno_ += message.sequence_length();
     if (payload_size > 0) {
       input_.reader().pop(payload_size);
     }
-    
-    // Send message and start timer
-    transmit(message);
-    outstanding_segments_.push_back(message);
-    if (!timer_.is_running()) {
-      timer_.start(last_tick_ms_);
+    if (!timer_.running_) {
+      timer_.start();
     }
   }
 }
@@ -116,30 +116,73 @@ TCPSenderMessage TCPSender::make_empty_message() const
 
 void TCPSender::receive( const TCPReceiverMessage& msg )
 {
-  // Handle acknowledgment
-  handle_ack(msg);
-  
-  // Handle window update
-  handle_window_update(msg);
-  
   // Handle reset flag
   if (msg.RST) {
-    handle_rst();
+    outstanding_segments_.clear();
+    timer_.stop();
+    input_.writer().set_error();
+    return;
+  }
+
+  // Update window size
+  window_size_ = msg.window_size;
+  if (window_size_ == 0) {
+    // Zero window, stop timer
+    timer_.stop();
+  } else if (!timer_.running_) {
+    // Window opened, start timer
+    timer_.start();
+  }
+
+  // Handle acknowledgment
+  if (msg.ackno.has_value()) {
+    // Get absolute sequence number
+    uint64_t abs_ackno = msg.ackno.value().unwrap(isn_, 0);
+    
+    // Ignore ackno beyond next_seqno
+    if (abs_ackno > next_seqno_) {
+      return;
+    }
+
+    bool segments_acked = false;
+    
+    // Remove acknowledged segments
+    while (!outstanding_segments_.empty()) {
+      const TCPSenderMessage& seg = outstanding_segments_.front();
+      uint64_t abs_seqno = seg.seqno.unwrap(isn_, 0) + seg.sequence_length();
+      
+      if (abs_seqno <= abs_ackno) {
+        bytes_in_flight_ -= seg.sequence_length();
+        outstanding_segments_.pop_front();
+        segments_acked = true;
+      } else {
+        break;
+      }
+    }
+
+    // Reset timer if we received new acknowledgments
+    if (outstanding_segments_.empty()) {
+      timer_.stop();
+    } else if (segments_acked) {
+      timer_.reset();
+      timer_.start();  // 重新启动定时器
+    }
   }
 }
 
 void TCPSender::tick( uint64_t ms_since_last_tick, const TransmitFunction& transmit )
 {
-  // Update timer and last tick time
+  if (!timer_.running_) {
+    return;
+  }
+
+  // Update timer
   timer_.tick(ms_since_last_tick);
-  last_tick_ms_ += ms_since_last_tick;
   
   // Check for timer expiration
-  if (timer_.is_expired(ms_since_last_tick) && !outstanding_segments_.empty()) {
-    // Increment retransmission counter
-    timer_.increment_retransmissions();
-    
-    // Double RTO if window is non-zero
+  if (timer_.is_expired() && !outstanding_segments_.empty()) {
+    // Increment retransmission counter and double RTO if window is non-zero
+    timer_.consecutive_retransmissions_++;
     if (window_size_ > 0) {
       timer_.double_RTO();
     }
@@ -147,51 +190,7 @@ void TCPSender::tick( uint64_t ms_since_last_tick, const TransmitFunction& trans
     // Retransmit the earliest outstanding segment
     transmit(outstanding_segments_.front());
     
-    // Restart timer
-    timer_.start(last_tick_ms_);
-  }
-}
-
-void TCPSender::handle_window_update(const TCPReceiverMessage& msg)
-{
-  window_size_ = msg.window_size;
-}
-
-void TCPSender::handle_rst()
-{
-  outstanding_segments_.clear();
-  timer_.stop();
-  input_.writer().set_error();
-}
-
-void TCPSender::handle_ack(const TCPReceiverMessage& msg)
-{
-  if (!msg.ackno.has_value()) {
-    return;
-  }
-
-  // Get absolute sequence number
-  uint64_t abs_ackno = msg.ackno.value().unwrap(isn_, 0);
-  bool segments_acked = false;
-  
-  // Remove acknowledged segments
-  while (!outstanding_segments_.empty()) {
-    const TCPSenderMessage& seg = outstanding_segments_.front();
-    uint64_t abs_seqno = seg.seqno.unwrap(isn_, 0) + seg.sequence_length();
-    
-    if (abs_seqno <= abs_ackno) {
-      bytes_in_flight_ -= seg.sequence_length();
-      outstanding_segments_.pop_front();
-      segments_acked = true;
-    } else {
-      break;
-    }
-  }
-
-  // Reset timer if we received new acknowledgments
-  if (outstanding_segments_.empty()) {
-    timer_.stop();
-  } else if (segments_acked) {
-    timer_.reset();
+    // Reset timer with new RTO
+    timer_.start();
   }
 }

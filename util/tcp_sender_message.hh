@@ -3,7 +3,7 @@
 #include "wrapping_integers.hh"
 
 #include <string>
-
+#include <sstream>
 /*
  * The TCPSenderMessage structure contains the information sent from a TCP sender to its receiver.
  *

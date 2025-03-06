@@ -4,11 +4,13 @@
 
 #include <functional>
 
-class RetransmissionTimer {
+class TCPSender;    
+
+struct RetransmissionTimer {
 public:
     explicit RetransmissionTimer(uint64_t initial_RTO_ms);
 
-    void start(uint64_t now_ms);
+    void start();
 
     void stop();
 
@@ -16,20 +18,22 @@ public:
 
     void tick(uint64_t ms_since_last_tick);
 
-    bool is_expired(uint64_t now_ms) const;
+    bool is_expired() const;
 
-    void double_RTO();
+    void double_RTO() { current_RTO_ms_ *= 2; }
 
-    void increment_retransmissions();
+    void increment_retransmissions() { consecutive_retransmissions_++; }
 
-    uint64_t consecutive_retransmissions() const;
+    uint64_t consecutive_retransmissions() const { return consecutive_retransmissions_; }
 
-    bool is_running() const;
+    bool is_running() const { return running_; }
 
 private:
+    friend class TCPSender; 
+
     const uint64_t initial_RTO_ms_;
     uint64_t current_RTO_ms_;
     bool running_;
-    uint64_t start_time_ms_;
+    uint64_t elapsed_time_ms_;
     uint64_t consecutive_retransmissions_;
 };

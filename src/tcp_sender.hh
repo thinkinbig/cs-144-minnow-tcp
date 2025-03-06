@@ -19,7 +19,6 @@ public:
     , window_size_( 1 )
     , next_seqno_( 0 )
     , bytes_in_flight_( 0 )
-    , last_tick_ms_( 0 )
     , timer_( initial_RTO_ms )
     , outstanding_segments_()
     , syn_sent_( false )
@@ -55,34 +54,8 @@ private:
   uint64_t window_size_;                         //!< Receiver's advertised window size 
   uint64_t next_seqno_;                          //!< Next sequence number to send
   uint64_t bytes_in_flight_;                     //!< Number of bytes in flight
-  uint64_t last_tick_ms_;                        //!< Time of last tick
   RetransmissionTimer timer_;                    //!< Retransmission timer
   std::deque<TCPSenderMessage> outstanding_segments_; //!< Queue of unacknowledged segments
   bool syn_sent_;                                //!< Whether SYN has been sent
   bool fin_sent_;                                //!< Whether FIN has been sent
-
-  /**
-   * @brief Process acknowledgment from receiver
-   * 
-   * @param msg The TCP receiver message
-   * 
-   * @details This method will:
-   * 1. Validate the ackno
-   * 2. Remove acknowledged segments
-   * 3. Reset RTO and retransmission count (if segments were acknowledged)
-   * 4. Update timer state
-   */
-  void handle_ack(const TCPReceiverMessage& msg);
-
-  /**
-   * @brief Update window size from receiver's message
-   * 
-   * @param msg The TCP receiver message
-   */
-  void handle_window_update(const TCPReceiverMessage& msg);
-
-  /**
-   * @brief Handle connection reset from receiver
-   */
-  void handle_rst();
 };
