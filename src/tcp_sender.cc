@@ -1,7 +1,8 @@
 #include "tcp_sender.hh"
 #include "debug.hh"
 #include "tcp_config.hh"
-#include <cstdio>
+
+#include <cassert>
 
 using namespace std;
 
@@ -32,6 +33,8 @@ void TCPSender::fill_payload( TCPSenderMessage& message, uint64_t window_availab
 
 bool TCPSender::try_set_fin( TCPSenderMessage& message, uint64_t window_available )
 {
+  assert( window_available > 0 || window_size_ == 0 );
+
   if ( !fin_sent_ && input_.writer().is_closed() && input_.reader().bytes_buffered() == 0
        && bytes_in_flight_ + message.payload.size() + 1 <= window_available ) {
     message.FIN = true;
@@ -43,6 +46,10 @@ bool TCPSender::try_set_fin( TCPSenderMessage& message, uint64_t window_availabl
 
 void TCPSender::send_message( TCPSenderMessage& message, const TransmitFunction& transmit )
 {
+
+  assert( message.sequence_length() > 0 );
+  assert( message.seqno == isn_ + next_seqno_ );
+
   transmit( message );
   outstanding_segments_.push_back( message );
   bytes_in_flight_ += message.sequence_length();
@@ -88,16 +95,20 @@ void TCPSender::push( const TransmitFunction& transmit )
     return;
   }
 
+  // Try to send standalone FIN
+  TCPSenderMessage message = make_empty_message();
+
+  if ( try_set_fin( message, effective_window ) ) {
+    send_message( message, transmit );
+    return;
+  }
+
   // Send data segments
   while ( window_remaining > 0 && input_.reader().bytes_buffered() > 0 ) {
-    TCPSenderMessage message = make_empty_message();
+    message = make_empty_message();
 
     // Fill payload
     fill_payload( message, window_remaining );
-
-    if ( message.sequence_length() == 0 ) {
-      break;
-    }
 
     // Try to set FIN flag
     try_set_fin( message, effective_window );
@@ -105,13 +116,6 @@ void TCPSender::push( const TransmitFunction& transmit )
     send_message( message, transmit );
 
     window_remaining = effective_window - bytes_in_flight_;
-  }
-
-  // Try to send standalone FIN
-  TCPSenderMessage message = make_empty_message();
-
-  if ( try_set_fin( message, effective_window ) ) {
-    send_message( message, transmit );
   }
 }
 
