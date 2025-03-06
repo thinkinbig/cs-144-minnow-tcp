@@ -1,12 +1,12 @@
 #pragma once
 
 #include "byte_stream.hh"
+#include "retransmission_timer.hh"
 #include "tcp_receiver_message.hh"
 #include "tcp_sender_message.hh"
-#include "retransmission_timer.hh"
 
-#include <functional>
 #include <deque>
+#include <functional>
 
 class TCPSender
 {
@@ -48,23 +48,23 @@ public:
   Writer& writer() { return input_.writer(); }
 
 private:
-  ByteStream input_;                              //!< Input byte stream
-  Wrap32 isn_;                                   //!< Initial sequence number
-  uint64_t initial_RTO_ms_;                      //!< Initial retransmission timeout in milliseconds
-  uint64_t window_size_;                         //!< Receiver's advertised window size 
-  uint64_t next_seqno_;                          //!< Next sequence number to send
-  uint64_t bytes_in_flight_;                     //!< Number of bytes in flight
-  RetransmissionTimer timer_;                    //!< Retransmission timer
+  ByteStream input_;                                  //!< Input byte stream
+  Wrap32 isn_;                                        //!< Initial sequence number
+  uint64_t initial_RTO_ms_;                           //!< Initial retransmission timeout in milliseconds
+  uint64_t window_size_;                              //!< Receiver's advertised window size
+  uint64_t next_seqno_;                               //!< Next sequence number to send
+  uint64_t bytes_in_flight_;                          //!< Number of bytes in flight
+  RetransmissionTimer timer_;                         //!< Retransmission timer
   std::deque<TCPSenderMessage> outstanding_segments_; //!< Queue of unacknowledged segments
-  bool syn_sent_;                                //!< Whether SYN has been sent
-  bool fin_sent_;                                //!< Whether FIN has been sent
+  bool syn_sent_;                                     //!< Whether SYN has been sent
+  bool fin_sent_;                                     //!< Whether FIN has been sent
 
   // Helper method to fill payload and update state
-  void fill_payload(TCPSenderMessage& message, uint64_t window_available);
+  void fill_payload( TCPSenderMessage& message, uint64_t window_available );
 
   // Helper method to check and set FIN flag
-  bool try_set_fin(TCPSenderMessage& message, uint64_t window_available);
+  bool try_set_fin( TCPSenderMessage& message, uint64_t window_available );
 
   // Helper method to send message and update state
-  void send_message(TCPSenderMessage& message, const TransmitFunction& transmit);
+  void send_message( TCPSenderMessage& message, const TransmitFunction& transmit );
 };
