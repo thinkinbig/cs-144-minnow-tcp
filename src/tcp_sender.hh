@@ -3,15 +3,27 @@
 #include "byte_stream.hh"
 #include "tcp_receiver_message.hh"
 #include "tcp_sender_message.hh"
+#include "retransmission_timer.hh"
 
 #include <functional>
+#include <deque>
 
 class TCPSender
 {
 public:
   /* Construct TCP sender with given default Retransmission Timeout and possible ISN */
   TCPSender( ByteStream&& input, Wrap32 isn, uint64_t initial_RTO_ms )
-    : input_( std::move( input ) ), isn_( isn ), initial_RTO_ms_( initial_RTO_ms )
+    : input_( std::move( input ) )
+    , isn_( isn )
+    , initial_RTO_ms_( initial_RTO_ms )
+    , window_size_( 1 )
+    , next_seqno_( 0 )
+    , bytes_in_flight_( 0 )
+    , last_tick_ms_( 0 )
+    , timer_( initial_RTO_ms )
+    , outstanding_segments_()
+    , syn_sent_( false )
+    , fin_sent_( false )
   {}
 
   /* Generate an empty TCPSenderMessage */
@@ -37,9 +49,40 @@ public:
   Writer& writer() { return input_.writer(); }
 
 private:
-  Reader& reader() { return input_.reader(); }
+  ByteStream input_;                              //!< Input byte stream
+  Wrap32 isn_;                                   //!< Initial sequence number
+  uint64_t initial_RTO_ms_;                      //!< Initial retransmission timeout in milliseconds
+  uint64_t window_size_;                         //!< Receiver's advertised window size 
+  uint64_t next_seqno_;                          //!< Next sequence number to send
+  uint64_t bytes_in_flight_;                     //!< Number of bytes in flight
+  uint64_t last_tick_ms_;                        //!< Time of last tick
+  RetransmissionTimer timer_;                    //!< Retransmission timer
+  std::deque<TCPSenderMessage> outstanding_segments_; //!< Queue of unacknowledged segments
+  bool syn_sent_;                                //!< Whether SYN has been sent
+  bool fin_sent_;                                //!< Whether FIN has been sent
 
-  ByteStream input_;
-  Wrap32 isn_;
-  uint64_t initial_RTO_ms_;
+  /**
+   * @brief Process acknowledgment from receiver
+   * 
+   * @param msg The TCP receiver message
+   * 
+   * @details This method will:
+   * 1. Validate the ackno
+   * 2. Remove acknowledged segments
+   * 3. Reset RTO and retransmission count (if segments were acknowledged)
+   * 4. Update timer state
+   */
+  void handle_ack(const TCPReceiverMessage& msg);
+
+  /**
+   * @brief Update window size from receiver's message
+   * 
+   * @param msg The TCP receiver message
+   */
+  void handle_window_update(const TCPReceiverMessage& msg);
+
+  /**
+   * @brief Handle connection reset from receiver
+   */
+  void handle_rst();
 };

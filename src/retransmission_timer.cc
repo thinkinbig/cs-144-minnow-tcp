@@ -26,7 +26,6 @@ void RetransmissionTimer::tick(uint64_t ms_since_last_tick) {
         return;
     }
 
-    // 更新计时器时间
     start_time_ms_ += ms_since_last_tick;
 }
 
