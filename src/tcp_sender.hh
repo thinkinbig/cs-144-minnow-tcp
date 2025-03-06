@@ -58,4 +58,13 @@ private:
   std::deque<TCPSenderMessage> outstanding_segments_; //!< Queue of unacknowledged segments
   bool syn_sent_;                                //!< Whether SYN has been sent
   bool fin_sent_;                                //!< Whether FIN has been sent
+
+  // Helper method to fill payload and update state
+  void fill_payload(TCPSenderMessage& message, uint64_t window_available);
+
+  // Helper method to check and set FIN flag
+  bool try_set_fin(TCPSenderMessage& message, uint64_t window_available);
+
+  // Helper method to send message and update state
+  void send_message(TCPSenderMessage& message, const TransmitFunction& transmit);
 };

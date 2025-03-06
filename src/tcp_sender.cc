@@ -17,32 +17,68 @@ uint64_t TCPSender::consecutive_retransmissions() const
   return timer_.consecutive_retransmissions_;
 }
 
+void TCPSender::fill_payload(TCPSenderMessage& message, uint64_t window_available)
+{
+  if (window_available > 0 && input_.reader().bytes_buffered() > 0) {
+    string_view data = input_.reader().peek();
+    uint64_t payload_size = min({
+      window_available,
+      data.size(),
+      TCPConfig::MAX_PAYLOAD_SIZE
+    });
+    
+    if (payload_size > 0) {
+      message.payload = string(data.substr(0, payload_size));
+      input_.reader().pop(payload_size);
+    }
+  }
+}
+
+bool TCPSender::try_set_fin(TCPSenderMessage& message, uint64_t window_available)
+{
+  if (!fin_sent_ && 
+      input_.writer().is_closed() && 
+      input_.reader().bytes_buffered() == 0 &&
+      bytes_in_flight_ + message.payload.size() + 1 <= window_available) {
+    message.FIN = true;
+    fin_sent_ = true;
+    return true;
+  }
+  return false;
+}
+
+void TCPSender::send_message(TCPSenderMessage& message, const TransmitFunction& transmit)
+{
+  transmit(message);
+  outstanding_segments_.push_back(message);
+  bytes_in_flight_ += message.sequence_length();
+  next_seqno_ += message.sequence_length();
+  if (!timer_.running_) {
+    timer_.start();
+  }
+}
+
 void TCPSender::push(const TransmitFunction& transmit)
 {
+  // Calculate effective window size
+  uint64_t effective_window = window_size_ == 0 ? 1 : window_size_;
+
   // Try to send SYN first if not sent yet
   if (next_seqno_ == 0 && !syn_sent_) {
-    TCPSenderMessage message {
-      .seqno = isn_,
-      .SYN = true,
-      .payload = "",
-      .FIN = false,
-      .RST = false
-    };
+    TCPSenderMessage message = make_empty_message();
+    message.SYN = true;
 
-    // Set FIN flag if input is closed and window allows
-    if (input_.writer().is_closed() && window_size_ >= 2) {
-      message.FIN = true;
-      fin_sent_ = true;
-    }
+    // Calculate available window (reserve 1 for SYN)
+    uint64_t available_window = effective_window > 1 ? effective_window - 1 : 0;
+    
+    // Try to fill payload if window allows
+    fill_payload(message, available_window);
 
-    transmit(message);
-    outstanding_segments_.push_back(message);
-    bytes_in_flight_ += message.sequence_length();
-    next_seqno_ += message.sequence_length();
+    // Try to set FIN if possible
+    try_set_fin(message, effective_window);
+
+    send_message(message, transmit);
     syn_sent_ = true;
-    if (!timer_.running_) {
-      timer_.start();
-    }
     return;
   }
 
@@ -51,8 +87,6 @@ void TCPSender::push(const TransmitFunction& transmit)
     return;
   }
 
-  // Calculate window sizes
-  uint64_t effective_window = window_size_ == 0 ? 1 : window_size_;
   uint64_t window_remaining = effective_window - bytes_in_flight_;
   
   // Don't send if no window available
@@ -60,75 +94,32 @@ void TCPSender::push(const TransmitFunction& transmit)
     return;
   }
 
-  // First try to send data
+  // Send data segments
   while (window_remaining > 0 && input_.reader().bytes_buffered() > 0) {
-    // Read data and calculate payload size
-    string_view data = input_.reader().peek();
-    uint64_t payload_size = min({
-      window_remaining,
-      data.size(),
-      TCPConfig::MAX_PAYLOAD_SIZE
-    });
+    TCPSenderMessage message = make_empty_message();
+
+    // Fill payload
+    fill_payload(message, window_remaining);
     
-    if (payload_size == 0) {
+    if (message.sequence_length() == 0) {
       break;
     }
 
-    // Create message
-    TCPSenderMessage message {
-      .seqno = isn_ + next_seqno_,
-      .SYN = false,
-      .payload = string(data.substr(0, payload_size)),
-      .FIN = false,
-      .RST = false
-    };
+    // Try to set FIN flag
+    try_set_fin(message, effective_window);
 
-    // Try to set FIN flag if:
-    // 1. Input is closed
-    // 2. All remaining data fits in this segment
-    // 3. There's room for FIN in the window
-    if (!fin_sent_ &&  // Add this check to avoid setting FIN twice
-        input_.writer().is_closed() && 
-        input_.reader().peek().size() <= payload_size &&
-        bytes_in_flight_ + payload_size + 1 <= effective_window) {
-      message.FIN = true;
-      fin_sent_ = true;
-    }
-
-    // Send if we have data or flags
-    if (message.sequence_length() > 0) {
-      transmit(message);
-      outstanding_segments_.push_back(message);
-      bytes_in_flight_ += message.sequence_length();
-      next_seqno_ += message.sequence_length();
-      input_.reader().pop(payload_size);
-      if (!timer_.running_) {
-        timer_.start();
-      }
-    }
+    send_message(message, transmit);
 
     window_remaining = effective_window - bytes_in_flight_;
   }
 
-  // If we haven't sent FIN yet and the stream is closed and we have window space
-  if (!fin_sent_ && input_.writer().is_closed() && input_.reader().bytes_buffered() == 0 && window_remaining > 0) {
-    TCPSenderMessage message {
-      .seqno = isn_ + next_seqno_,
-      .SYN = false,
-      .payload = "",
-      .FIN = true,
-      .RST = false
-    };
+  // Try to send standalone FIN
+  TCPSenderMessage message = make_empty_message();
 
-    transmit(message);
-    outstanding_segments_.push_back(message);
-    bytes_in_flight_ += message.sequence_length();
-    next_seqno_ += message.sequence_length();
-    fin_sent_ = true;
-    if (!timer_.running_) {
-      timer_.start();
-    }
+  if (try_set_fin(message, effective_window)) {
+    send_message(message, transmit);
   }
+
 }
 
 TCPSenderMessage TCPSender::make_empty_message() const
@@ -181,11 +172,11 @@ void TCPSender::receive( const TCPReceiverMessage& msg )
     }
 
     if (segments_acked) {
-      timer_.reset();  // 先重置 RTO 和重传计数
+      timer_.reset();
       if (!outstanding_segments_.empty()) {
-        timer_.start();  // 如果还有未确认的段，则重启计时器
+        timer_.start();
       } else {
-        timer_.stop();   // 如果没有未确认的段，则停止计时器
+        timer_.stop();
       }
     }
   }
