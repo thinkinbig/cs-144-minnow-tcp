@@ -112,9 +112,9 @@ private:
 
   ARPTimer arp_timer_ {};
 
-  void send_arp_request(const InternetDatagram& dgram, const Address& next_hop);
+  void send_arp_request(const Address& next_hop);
 
-  void send_ipv4_datagram(const InternetDatagram& dgram);
+  void send_ipv4_datagram(const InternetDatagram& dgram, uint32_t next_hop_ip);
 
   void handle_arp_reply(const EthernetFrame& frame);
 

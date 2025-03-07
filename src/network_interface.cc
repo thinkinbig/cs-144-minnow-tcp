@@ -30,24 +30,26 @@ NetworkInterface::NetworkInterface( string_view name,
 //! can be converted to a uint32_t (raw 32-bit IP address) by using the Address::ipv4_numeric() method.
 void NetworkInterface::send_datagram( const InternetDatagram& dgram, const Address& next_hop )
 {
+  uint32_t next_hop_ip = next_hop.ipv4_numeric();
+  
   // If the destination Ethernet address is already known, send it right away
-  if (arp_table_.find(dgram.header.dst) != arp_table_.end()) {
-    send_ipv4_datagram(dgram);
+  if (arp_table_.find(next_hop_ip) != arp_table_.end()) {
+    send_ipv4_datagram(dgram, next_hop_ip);
     return;
   }
 
-  // Send ARP request if timer is not running or has expired
-  if (!arp_timer_.is_running() || arp_timer_.is_expired()) {
-    send_arp_request(dgram, next_hop);
-    arp_timer_.start();  // Start/restart the timer
-  }
-  
   // Store the datagram in pending queue
   PendingDatagram pending;
   pending.dgram = dgram;
   pending.next_hop = next_hop;
   pending.time_sent = arp_timer_.elapsed_time_ms_;
   pending_datagrams_.push(pending);
+
+  // Only send ARP request if timer is not running (no ongoing ARP request)
+  if (!arp_timer_.is_running()) {
+    send_arp_request(next_hop);
+    arp_timer_.start();  // Start the timer
+  }
 }
 
 //! \param[in] frame the incoming Ethernet frame
@@ -90,15 +92,15 @@ void NetworkInterface::tick( const size_t ms_since_last_tick )
     }
   }
 
-  // Check if need to resend ARP request
+  // If timer expired and we have pending datagrams, resend ARP request
   if (arp_timer_.is_expired() && !pending_datagrams_.empty()) {
     const auto& pending = pending_datagrams_.front();
-    send_arp_request(pending.dgram, pending.next_hop);
+    send_arp_request(pending.next_hop);
     arp_timer_.start();  // Restart timer for next attempt
   }
 }
 
-void NetworkInterface::send_arp_request(const InternetDatagram& dgram, const Address& next_hop)
+void NetworkInterface::send_arp_request(const Address& next_hop)
 {
   // Create and send ARP request
   ARPMessage arp_request;
@@ -118,9 +120,9 @@ void NetworkInterface::send_arp_request(const InternetDatagram& dgram, const Add
   transmit(frame);
 }
 
-void NetworkInterface::send_ipv4_datagram(const InternetDatagram& dgram) {
+void NetworkInterface::send_ipv4_datagram(const InternetDatagram& dgram, uint32_t next_hop_ip) {
     EthernetHeader eth_header;
-    eth_header.dst = arp_table_[dgram.header.dst].eth_addr;
+    eth_header.dst = arp_table_[next_hop_ip].eth_addr;
     eth_header.src = ethernet_address_;
     eth_header.type = EthernetHeader::TYPE_IPv4;
     EthernetFrame frame;
@@ -145,7 +147,7 @@ void NetworkInterface::handle_arp_reply(const EthernetFrame& frame) {
   while (!pending_datagrams_.empty()) {
     const auto& pending = pending_datagrams_.front();
     if (arp_table_.find(pending.next_hop.ipv4_numeric()) != arp_table_.end()) {
-      send_ipv4_datagram(pending.dgram);
+      send_ipv4_datagram(pending.dgram, pending.next_hop.ipv4_numeric());
       pending_datagrams_.pop();
     } else {
       break;
