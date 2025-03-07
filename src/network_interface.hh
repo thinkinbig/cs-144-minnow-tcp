@@ -3,9 +3,11 @@
 #include "address.hh"
 #include "ethernet_frame.hh"
 #include "ipv4_datagram.hh"
+#include "timer.hh"
 
 #include <memory>
 #include <queue>
+#include <unordered_map>
 
 // A "network interface" that connects IP (the internet layer, or network layer)
 // with Ethernet (the network access layer, or link layer).
@@ -82,4 +84,32 @@ private:
 
   // Datagrams that have been received
   std::queue<InternetDatagram> datagrams_received_ {};
+
+  // ARP 缓存表项
+  struct ARPEntry {
+    EthernetAddress eth_addr {};  // 以太网地址
+    size_t expire_time { 0 };     // 过期时间(毫秒)
+  };
+
+  // ARP 缓存表,将 IP 地址映射到以太网地址
+  std::unordered_map<uint32_t, ARPEntry> arp_table_ {};
+
+  // 等待 ARP 回复的数据报队列
+  struct PendingDatagram {
+    InternetDatagram dgram {};
+    Address next_hop { "0.0.0.0", 0 };  // 使用有效的 IP 地址和端口初始化
+    size_t time_sent { 0 };       // ARP 请求发送时间
+  };
+  std::queue<PendingDatagram> pending_datagrams_ {};
+
+  // 记录已发送 ARP 请求的 IP 地址及其计时器
+  std::unordered_map<uint32_t, ARPTimer> arp_timers_ {};
+
+  // 当前时间(毫秒)
+  size_t current_time_ { 0 };
+
+  // ARP 缓存过期时间(30秒)
+  static constexpr size_t ARP_ENTRY_TTL = 30000;
+  // ARP 请求重试时间(5秒)
+  static constexpr size_t ARP_REQUEST_TIMEOUT = 5000;
 };

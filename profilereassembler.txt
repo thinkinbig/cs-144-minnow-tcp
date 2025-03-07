@@ -1,0 +1,251 @@
+Flat profile:
+
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total           
+ time   seconds   seconds    calls  ms/call  ms/call  name    
+ 71.43      0.05     0.05  3000002     0.00     0.00  frame_dummy
+ 28.57      0.07     0.02        2    10.00    35.00  speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >)
+  0.00      0.07     0.00   260215     0.00     0.00  ByteStream::reader()
+  0.00      0.07     0.00   259937     0.00     0.00  Reader::bytes_buffered() const
+  0.00      0.07     0.00   259845     0.00     0.00  ByteStream::writer()
+  0.00      0.07     0.00   259845     0.00     0.00  Reassembler::insert(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool)
+  0.00      0.07     0.00    11124     0.00     0.00  Writer::available_capacity() const
+  0.00      0.07     0.00    11124     0.00     0.00  std::set<Reassembler::Segment, std::less<Reassembler::Segment>, std::allocator<Reassembler::Segment> >::insert(Reassembler::Segment const&)
+  0.00      0.07     0.00    10026     0.00     0.00  Reassembler::Segment::merge_with(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+  0.00      0.07     0.00     9612     0.00     0.00  read(Reader&, unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)
+  0.00      0.07     0.00     1098     0.00     0.00  Writer::push(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >)
+  0.00      0.07     0.00       92     0.00     0.00  Reader::pop(unsigned long)
+  0.00      0.07     0.00       92     0.00     0.00  Reader::bytes_popped() const
+  0.00      0.07     0.00       92     0.00     0.00  Reader::peek() const
+  0.00      0.07     0.00       21     0.00     0.00  std::deque<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool>, std::allocator<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool> > >::_M_reallocate_map(unsigned long, bool)
+  0.00      0.07     0.00        6     0.00     0.00  std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_mutate(unsigned long, unsigned long, char const*, unsigned long)
+  0.00      0.07     0.00        2     0.00     0.00  ByteStream::ByteStream(unsigned long)
+  0.00      0.07     0.00        2     0.00     0.00  Writer::close()
+  0.00      0.07     0.00        2     0.00     0.00  Reader::is_finished() const
+  0.00      0.07     0.00        2     0.00     0.00  std::deque<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool>, std::allocator<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool> > >::~deque()
+  0.00      0.07     0.00        1     0.00    70.00  program_body()
+
+ %         the percentage of the total running time of the
+time       program used by this function.
+
+cumulative a running sum of the number of seconds accounted
+ seconds   for by this function and those listed above it.
+
+ self      the number of seconds accounted for by this
+seconds    function alone.  This is the major sort for this
+           listing.
+
+calls      the number of times this function was invoked, if
+           this function is profiled, else blank.
+
+ self      the average number of milliseconds spent in this
+ms/call    function per call, if this function is profiled,
+	   else blank.
+
+ total     the average number of milliseconds spent in this
+ms/call    function and its descendents per call, if this
+	   function is profiled, else blank.
+
+name       the name of the function.  This is the minor sort
+           for this listing. The index shows the location of
+	   the function in the gprof listing. If the index is
+	   in parenthesis it shows where it would appear in
+	   the gprof listing if it were to be printed.
+
+Copyright (C) 2012-2024 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
+
+		     Call graph (explanation follows)
+
+
+granularity: each sample hit covers 4 byte(s) for 14.29% of 0.07 seconds
+
+index % time    self  children    called     name
+                                                 <spontaneous>
+[1]    100.0    0.00    0.07                 main [1]
+                0.00    0.07       1/1           program_body() [3]
+-----------------------------------------------
+                0.02    0.05       2/2           program_body() [3]
+[2]    100.0    0.02    0.05       2         speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+                0.05    0.00 3000002/3000002     frame_dummy [4]
+                0.00    0.00  260215/260215      ByteStream::reader() [10]
+                0.00    0.00  259937/259937      Reader::bytes_buffered() const [11]
+                0.00    0.00  259845/259845      Reassembler::insert(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool) [13]
+                0.00    0.00      92/92          Reader::bytes_popped() const [20]
+                0.00    0.00      92/92          Reader::pop(unsigned long) [19]
+                0.00    0.00      92/92          Reader::peek() const [21]
+                0.00    0.00      21/21          std::deque<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool>, std::allocator<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool> > >::_M_reallocate_map(unsigned long, bool) [22]
+                0.00    0.00       2/2           ByteStream::ByteStream(unsigned long) [24]
+                0.00    0.00       2/2           Writer::close() [25]
+                0.00    0.00       2/2           Reader::is_finished() const [26]
+                0.00    0.00       2/2           std::deque<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool>, std::allocator<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool> > >::~deque() [27]
+-----------------------------------------------
+                0.00    0.07       1/1           main [1]
+[3]    100.0    0.00    0.07       1         program_body() [3]
+                0.02    0.05       2/2           speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+-----------------------------------------------
+                0.05    0.00 3000002/3000002     speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[4]     71.4    0.05    0.00 3000002         frame_dummy [4]
+-----------------------------------------------
+                0.00    0.00  260215/260215      speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[10]     0.0    0.00    0.00  260215         ByteStream::reader() [10]
+-----------------------------------------------
+                0.00    0.00  259937/259937      speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[11]     0.0    0.00    0.00  259937         Reader::bytes_buffered() const [11]
+-----------------------------------------------
+                0.00    0.00  259845/259845      Reassembler::insert(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool) [13]
+[12]     0.0    0.00    0.00  259845         ByteStream::writer() [12]
+-----------------------------------------------
+                0.00    0.00  259845/259845      speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[13]     0.0    0.00    0.00  259845         Reassembler::insert(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool) [13]
+                0.00    0.00  259845/259845      ByteStream::writer() [12]
+                0.00    0.00   11124/11124       Writer::available_capacity() const [14]
+                0.00    0.00   11124/11124       std::set<Reassembler::Segment, std::less<Reassembler::Segment>, std::allocator<Reassembler::Segment> >::insert(Reassembler::Segment const&) [15]
+                0.00    0.00   10026/10026       Reassembler::Segment::merge_with(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) [16]
+                0.00    0.00    9612/9612        read(Reader&, unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&) [17]
+                0.00    0.00    1098/1098        Writer::push(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) [18]
+-----------------------------------------------
+                0.00    0.00   11124/11124       Reassembler::insert(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool) [13]
+[14]     0.0    0.00    0.00   11124         Writer::available_capacity() const [14]
+-----------------------------------------------
+                0.00    0.00   11124/11124       Reassembler::insert(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool) [13]
+[15]     0.0    0.00    0.00   11124         std::set<Reassembler::Segment, std::less<Reassembler::Segment>, std::allocator<Reassembler::Segment> >::insert(Reassembler::Segment const&) [15]
+-----------------------------------------------
+                0.00    0.00   10026/10026       Reassembler::insert(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool) [13]
+[16]     0.0    0.00    0.00   10026         Reassembler::Segment::merge_with(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) [16]
+-----------------------------------------------
+                0.00    0.00    9612/9612        Reassembler::insert(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool) [13]
+[17]     0.0    0.00    0.00    9612         read(Reader&, unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&) [17]
+-----------------------------------------------
+                0.00    0.00    1098/1098        Reassembler::insert(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool) [13]
+[18]     0.0    0.00    0.00    1098         Writer::push(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) [18]
+                0.00    0.00       6/6           std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_mutate(unsigned long, unsigned long, char const*, unsigned long) [23]
+-----------------------------------------------
+                0.00    0.00      92/92          speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[19]     0.0    0.00    0.00      92         Reader::pop(unsigned long) [19]
+-----------------------------------------------
+                0.00    0.00      92/92          speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[20]     0.0    0.00    0.00      92         Reader::bytes_popped() const [20]
+-----------------------------------------------
+                0.00    0.00      92/92          speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[21]     0.0    0.00    0.00      92         Reader::peek() const [21]
+-----------------------------------------------
+                0.00    0.00      21/21          speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[22]     0.0    0.00    0.00      21         std::deque<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool>, std::allocator<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool> > >::_M_reallocate_map(unsigned long, bool) [22]
+-----------------------------------------------
+                0.00    0.00       6/6           Writer::push(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) [18]
+[23]     0.0    0.00    0.00       6         std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_mutate(unsigned long, unsigned long, char const*, unsigned long) [23]
+-----------------------------------------------
+                0.00    0.00       2/2           speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[24]     0.0    0.00    0.00       2         ByteStream::ByteStream(unsigned long) [24]
+-----------------------------------------------
+                0.00    0.00       2/2           speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[25]     0.0    0.00    0.00       2         Writer::close() [25]
+-----------------------------------------------
+                0.00    0.00       2/2           speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[26]     0.0    0.00    0.00       2         Reader::is_finished() const [26]
+-----------------------------------------------
+                0.00    0.00       2/2           speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [2]
+[27]     0.0    0.00    0.00       2         std::deque<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool>, std::allocator<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool> > >::~deque() [27]
+-----------------------------------------------
+
+ This table describes the call tree of the program, and was sorted by
+ the total amount of time spent in each function and its children.
+
+ Each entry in this table consists of several lines.  The line with the
+ index number at the left hand margin lists the current function.
+ The lines above it list the functions that called this function,
+ and the lines below it list the functions this one called.
+ This line lists:
+     index	A unique number given to each element of the table.
+		Index numbers are sorted numerically.
+		The index number is printed next to every function name so
+		it is easier to look up where the function is in the table.
+
+     % time	This is the percentage of the `total' time that was spent
+		in this function and its children.  Note that due to
+		different viewpoints, functions excluded by options, etc,
+		these numbers will NOT add up to 100%.
+
+     self	This is the total amount of time spent in this function.
+
+     children	This is the total amount of time propagated into this
+		function by its children.
+
+     called	This is the number of times the function was called.
+		If the function called itself recursively, the number
+		only includes non-recursive calls, and is followed by
+		a `+' and the number of recursive calls.
+
+     name	The name of the current function.  The index number is
+		printed after it.  If the function is a member of a
+		cycle, the cycle number is printed between the
+		function's name and the index number.
+
+
+ For the function's parents, the fields have the following meanings:
+
+     self	This is the amount of time that was propagated directly
+		from the function into this parent.
+
+     children	This is the amount of time that was propagated from
+		the function's children into this parent.
+
+     called	This is the number of times this parent called the
+		function `/' the total number of times the function
+		was called.  Recursive calls to the function are not
+		included in the number after the `/'.
+
+     name	This is the name of the parent.  The parent's index
+		number is printed after it.  If the parent is a
+		member of a cycle, the cycle number is printed between
+		the name and the index number.
+
+ If the parents of the function cannot be determined, the word
+ `<spontaneous>' is printed in the `name' field, and all the other
+ fields are blank.
+
+ For the function's children, the fields have the following meanings:
+
+     self	This is the amount of time that was propagated directly
+		from the child into the function.
+
+     children	This is the amount of time that was propagated from the
+		child's children to the function.
+
+     called	This is the number of times the function called
+		this child `/' the total number of times the child
+		was called.  Recursive calls by the child are not
+		listed in the number after the `/'.
+
+     name	This is the name of the child.  The child's index
+		number is printed after it.  If the child is a
+		member of a cycle, the cycle number is printed
+		between the name and the index number.
+
+ If there are any cycles (circles) in the call graph, there is an
+ entry for the cycle-as-a-whole.  This entry shows who called the
+ cycle (as parents) and the members of the cycle (as children.)
+ The `+' recursive calls entry shows the number of function calls that
+ were internal to the cycle, and the calls entry for each member shows,
+ for that member, how many times it was called from other members of
+ the cycle.
+
+Copyright (C) 2012-2024 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
+
+Index by function name
+
+   [2] speed_test(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, std::basic_string_view<char, std::char_traits<char> >) [16] Reassembler::Segment::merge_with(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) [21] Reader::peek() const
+   [3] program_body()         [19] Reader::pop(unsigned long) [14] Writer::available_capacity() const
+  [17] read(Reader&, unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&) [18] Writer::push(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) [15] std::set<Reassembler::Segment, std::less<Reassembler::Segment>, std::allocator<Reassembler::Segment> >::insert(Reassembler::Segment const&)
+  [10] ByteStream::reader()   [25] Writer::close()        [22] std::deque<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool>, std::allocator<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool> > >::_M_reallocate_map(unsigned long, bool)
+  [12] ByteStream::writer()   [26] Reader::is_finished() const [27] std::deque<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool>, std::allocator<std::tuple<unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool> > >::~deque()
+  [24] ByteStream::ByteStream(unsigned long) [20] Reader::bytes_popped() const [23] std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_mutate(unsigned long, unsigned long, char const*, unsigned long)
+  [13] Reassembler::insert(unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, bool) [11] Reader::bytes_buffered() const [4] frame_dummy
