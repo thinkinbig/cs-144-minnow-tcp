@@ -85,31 +85,40 @@ private:
   // Datagrams that have been received
   std::queue<InternetDatagram> datagrams_received_ {};
 
-  // ARP 缓存表项
+  // ARP cache entry
   struct ARPEntry {
-    EthernetAddress eth_addr {};  // 以太网地址
-    size_t expire_time { 0 };     // 过期时间(毫秒)
+    EthernetAddress eth_addr {};  // Ethernet address
+    size_t expire_time { 0 };     // Expiration time (milliseconds)
   };
 
-  // ARP 缓存表,将 IP 地址映射到以太网地址
+  // ARP cache table, mapping IP addresses to Ethernet addresses
   std::unordered_map<uint32_t, ARPEntry> arp_table_ {};
 
-  // 等待 ARP 回复的数据报队列
+  // Queue of datagrams waiting for ARP replies
   struct PendingDatagram {
     InternetDatagram dgram {};
-    Address next_hop { "0.0.0.0", 0 };  // 使用有效的 IP 地址和端口初始化
-    size_t time_sent { 0 };       // ARP 请求发送时间
+    Address next_hop { "0.0.0.0", 0 };  // Initialize with valid IP address and port
+    size_t time_sent { 0 };       // Time when ARP request was sent
   };
   std::queue<PendingDatagram> pending_datagrams_ {};
 
-  // 记录已发送 ARP 请求的 IP 地址及其计时器
+  // Track sent ARP requests and their timers for each IP address
   std::unordered_map<uint32_t, ARPTimer> arp_timers_ {};
 
-  // 当前时间(毫秒)
-  size_t current_time_ { 0 };
-
-  // ARP 缓存过期时间(30秒)
+  // ARP cache entry time-to-live (30 seconds)
   static constexpr size_t ARP_ENTRY_TTL = 30000;
-  // ARP 请求重试时间(5秒)
+  // ARP request retry timeout (5 seconds)
   static constexpr size_t ARP_REQUEST_TIMEOUT = 5000;
+
+  ARPTimer arp_timer_ {};
+
+  void send_arp_request(const InternetDatagram& dgram, const Address& next_hop);
+
+  void send_ipv4_datagram(const InternetDatagram& dgram);
+
+  void handle_arp_reply(const EthernetFrame& frame);
+
+  void handle_arp_request(const EthernetFrame& frame);
+
+  void handle_ipv4_datagram(const EthernetFrame& frame);
 };

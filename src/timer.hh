@@ -6,6 +6,7 @@
 #include <cstddef>
 
 class TCPSender;
+
 class NetworkInterface;
 
 // 基础计时器抽象类
@@ -49,10 +50,12 @@ private:
 };
 
 
-// ARP 请求重传计时器
 class ARPTimer : public Timer {
 public:
-  static constexpr size_t TIMEOUT_MS = 5000;  // 5秒超时
-  
+  static constexpr size_t TIMEOUT_MS = 5000;  // 5 seconds timeout
+
   bool is_expired() const override;
+
+private:
+  friend class NetworkInterface;
 };
