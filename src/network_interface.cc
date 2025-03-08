@@ -32,71 +32,66 @@ void NetworkInterface::send_datagram( const InternetDatagram& dgram, const Addre
 {
   uint32_t next_hop_ip = next_hop.ipv4_numeric();
   
-  // If the destination Ethernet address is already known, send it right away
-  if (arp_table_.find(next_hop_ip) != arp_table_.end()) {
+  // Check if we have a valid ARP entry
+  auto it = arp_table_.find(next_hop_ip);
+  if (it != arp_table_.end()) {
     send_ipv4_datagram(dgram, next_hop_ip);
     return;
   }
 
-  // Store the datagram in pending queue
+  // Queue the datagram
   PendingDatagram pending;
   pending.dgram = dgram;
   pending.next_hop = next_hop;
-  pending.time_sent = arp_timer_.elapsed_time_ms_;
   pending_datagrams_.push(pending);
 
-  // Only send ARP request if timer is not running (no ongoing ARP request)
-  if (!arp_timer_.is_running()) {
+  // Send ARP request if timer allows
+  auto timer_it = arp_timers_.find(next_hop_ip);
+  if (timer_it == arp_timers_.end() || timer_it->second.is_expired()) {
     send_arp_request(next_hop);
-    arp_timer_.start();  // Start the timer
+    arp_timers_[next_hop_ip].start();
   }
 }
 
 //! \param[in] frame the incoming Ethernet frame
 void NetworkInterface::recv_frame( EthernetFrame frame )
 {
-  // Ignore frames not destined for us (unless broadcast)
+  // Check if frame is for us
   if (frame.header.dst != ethernet_address_ && frame.header.dst != ETHERNET_BROADCAST) {
     return;
   }
 
-  // Handle frame based on type
   if (frame.header.type == EthernetHeader::TYPE_IPv4) {
     handle_ipv4_datagram(frame);
-  } else if (frame.header.type == EthernetHeader::TYPE_ARP) {
+    return;
+  }
+
+  if (frame.header.type == EthernetHeader::TYPE_ARP) {
     ARPMessage arp_msg;
     if (!parse(arp_msg, frame.payload)) {
       return;
     }
 
-    if (arp_msg.opcode == ARPMessage::OPCODE_REPLY) {
-      handle_arp_reply(frame);
-    } else if (arp_msg.opcode == ARPMessage::OPCODE_REQUEST) {
-      handle_arp_request(frame);
-    }
-  }
+    //TODO: rewrite recv frame
+    return;
+
 }
 
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
 void NetworkInterface::tick( const size_t ms_since_last_tick )
 {
-  // Update ARP timer
-  arp_timer_.tick(ms_since_last_tick);
+  // Update all timers
+  for (auto& [ip, timer] : arp_timers_) {
+    timer.tick(ms_since_last_tick);
+  }
 
-  // Clean expired ARP cache entries
+  // Clean up expired ARP entries
   for (auto it = arp_table_.begin(); it != arp_table_.end();) {
-    if (arp_timer_.elapsed_time_ms_ >= it->second.expire_time) {
+    if (arp_timers_[it->first].is_expired()) {
       it = arp_table_.erase(it);
     } else {
       ++it;
     }
-  }
-
-  // If timer expired and we have pending datagrams, resend ARP request
-  if (arp_timer_.is_expired() && !pending_datagrams_.empty()) {
-    const auto& pending = pending_datagrams_.front();
-    send_arp_request(pending.next_hop);
-    arp_timer_.start();  // Restart timer for next attempt
   }
 }
 
@@ -131,35 +126,7 @@ void NetworkInterface::send_ipv4_datagram(const InternetDatagram& dgram, uint32_
     transmit(frame);
 }
 
-void NetworkInterface::handle_arp_reply(const EthernetFrame& frame) {
-  ARPMessage arp_msg;
-  if (!parse(arp_msg, frame.payload)) {
-    return;
-  }
-
-  // Update ARP cache
-  ARPEntry entry;
-  entry.eth_addr = arp_msg.sender_ethernet_address;
-  entry.expire_time = arp_timer_.elapsed_time_ms_ + ARP_ENTRY_TTL;
-  arp_table_[arp_msg.sender_ip_address] = entry;
-
-  // Send pending datagrams
-  while (!pending_datagrams_.empty()) {
-    const auto& pending = pending_datagrams_.front();
-    if (arp_table_.find(pending.next_hop.ipv4_numeric()) != arp_table_.end()) {
-      send_ipv4_datagram(pending.dgram, pending.next_hop.ipv4_numeric());
-      pending_datagrams_.pop();
-    } else {
-      break;
-    }
-  }
-}
-
-void NetworkInterface::handle_arp_request(const EthernetFrame& frame) {
-  ARPMessage arp_msg;
-  if (!parse(arp_msg, frame.payload)) {
-    return;
-  }
+void NetworkInterface::handle_arp_request(const ARPMessage& arp_msg) {
 
   // Only respond if the target IP matches our IP
   if (arp_msg.target_ip_address != ip_address_.ipv4_numeric()) {
@@ -181,12 +148,6 @@ void NetworkInterface::handle_arp_request(const EthernetFrame& frame) {
   reply_frame.header.dst = arp_msg.sender_ethernet_address;
   reply_frame.payload = serialize(arp_reply);
   transmit(reply_frame);
-
-  // Learn the mapping from the request
-  ARPEntry entry;
-  entry.eth_addr = arp_msg.sender_ethernet_address;
-  entry.expire_time = arp_timer_.elapsed_time_ms_ + ARP_ENTRY_TTL;
-  arp_table_[arp_msg.sender_ip_address] = entry;
 }
 
 void NetworkInterface::handle_ipv4_datagram(const EthernetFrame& frame) {
@@ -195,10 +156,7 @@ void NetworkInterface::handle_ipv4_datagram(const EthernetFrame& frame) {
     return;
   }
   
-  // Only accept if destined for us
-  if (dgram.header.dst != ip_address_.ipv4_numeric()) {
-    return;
-  }
-
+  // We should accept all IPv4 datagrams that are sent to our MAC address
+  // The IP layer above us will handle IP-level filtering
   datagrams_received_.push(dgram);
 }

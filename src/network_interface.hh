@@ -98,27 +98,17 @@ private:
   struct PendingDatagram {
     InternetDatagram dgram {};
     Address next_hop { "0.0.0.0", 0 };  // Initialize with valid IP address and port
-    size_t time_sent { 0 };       // Time when ARP request was sent
   };
   std::queue<PendingDatagram> pending_datagrams_ {};
 
   // Track sent ARP requests and their timers for each IP address
-  std::unordered_map<uint32_t, ARPTimer> arp_timers_ {};
-
-  // ARP cache entry time-to-live (30 seconds)
-  static constexpr size_t ARP_ENTRY_TTL = 30000;
-  // ARP request retry timeout (5 seconds)
-  static constexpr size_t ARP_REQUEST_TIMEOUT = 5000;
-
-  ARPTimer arp_timer_ {};
+  std::unordered_map<uint32_t, NetworkTimer> arp_timers_ {};
 
   void send_arp_request(const Address& next_hop);
 
   void send_ipv4_datagram(const InternetDatagram& dgram, uint32_t next_hop_ip);
 
-  void handle_arp_reply(const EthernetFrame& frame);
-
-  void handle_arp_request(const EthernetFrame& frame);
+  void handle_arp_request(const ARPMessage& arp_msg);
 
   void handle_ipv4_datagram(const EthernetFrame& frame);
 };
