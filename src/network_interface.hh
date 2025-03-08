@@ -4,10 +4,12 @@
 #include "ethernet_frame.hh"
 #include "ipv4_datagram.hh"
 #include "timer.hh"
+#include "arp_table.hh"
 
 #include <memory>
 #include <queue>
 #include <unordered_map>
+#include <optional>
 
 // A "network interface" that connects IP (the internet layer, or network layer)
 // with Ethernet (the network access layer, or link layer).
@@ -65,8 +67,7 @@ public:
   // Accessors
   const std::string& name() const { return name_; }
   const OutputPort& output() const { return *port_; }
-  OutputPort& output() { return *port_; }
-  std::queue<InternetDatagram>& datagrams_received() { return datagrams_received_; }
+  OutputPort& output() { return *port_; }   
 
 private:
   // Human-readable name of the interface
@@ -74,41 +75,10 @@ private:
 
   // The physical output port (+ a helper function `transmit` that uses it to send an Ethernet frame)
   std::shared_ptr<OutputPort> port_;
-  void transmit( const EthernetFrame& frame ) const { port_->transmit( *this, frame ); }
 
   // Ethernet (known as hardware, network-access-layer, or link-layer) address of the interface
   EthernetAddress ethernet_address_;
 
   // IP (known as internet-layer or network-layer) address of the interface
   Address ip_address_;
-
-  // Datagrams that have been received
-  std::queue<InternetDatagram> datagrams_received_ {};
-
-  // ARP cache entry
-  struct ARPEntry {
-    EthernetAddress eth_addr {};  // Ethernet address
-    size_t expire_time { 0 };     // Expiration time (milliseconds)
-  };
-
-  // ARP cache table, mapping IP addresses to Ethernet addresses
-  std::unordered_map<uint32_t, ARPEntry> arp_table_ {};
-
-  // Queue of datagrams waiting for ARP replies
-  struct PendingDatagram {
-    InternetDatagram dgram {};
-    Address next_hop { "0.0.0.0", 0 };  // Initialize with valid IP address and port
-  };
-  std::queue<PendingDatagram> pending_datagrams_ {};
-
-  // Track sent ARP requests and their timers for each IP address
-  std::unordered_map<uint32_t, NetworkTimer> arp_timers_ {};
-
-  void send_arp_request(const Address& next_hop);
-
-  void send_ipv4_datagram(const InternetDatagram& dgram, uint32_t next_hop_ip);
-
-  void handle_arp_request(const ARPMessage& arp_msg);
-
-  void handle_ipv4_datagram(const EthernetFrame& frame);
 };
