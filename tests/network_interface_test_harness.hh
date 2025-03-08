@@ -40,6 +40,7 @@ public:
     : TestHarness( move( test_name ), "eth=" + to_string( ethernet_address ) + ", ip=" + ip_address.ip(), [&] {
       Output output { std::make_shared<FramesOut>() };
       NetworkInterface iface { "test", output, ethernet_address, ip_address };
+      iface.initialize();
       return InterfaceAndOutput { std::move( iface ), std::move( output ) };
     }() )
   {}
