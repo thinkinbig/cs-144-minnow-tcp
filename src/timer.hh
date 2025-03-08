@@ -7,8 +7,6 @@
 
 class TCPSender;
 
-class NetworkInterface;
-
 // 基础计时器抽象类
 class Timer {
 public:
@@ -97,5 +95,4 @@ public:
   }
 
 private:
-  friend class NetworkInterface;
 };

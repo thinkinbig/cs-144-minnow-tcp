@@ -22,6 +22,7 @@ NetworkInterface::NetworkInterface( string_view name,
 {
   cerr << "DEBUG: Network interface has Ethernet address " << to_string( ethernet_address_ ) << " and IP address "
        << ip_address.ip() << "\n";
+  pending_arp_queue_.set_timeout_observer(shared_from_this());
 }
 
 //! \param[in] dgram the IPv4 datagram to be sent
@@ -34,6 +35,14 @@ void NetworkInterface::send_datagram( const InternetDatagram& dgram, const Addre
 }
 
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
-void NetworkInterface::tick( const size_t ms_since_last_tick )
-{
+void NetworkInterface::tick(const size_t ms_since_last_tick) {
+    // 更新 ARP 表
+    arp_table_.tick(ms_since_last_tick);
+    
+    // 更新待处理队列
+    pending_arp_queue_.tick(ms_since_last_tick);
+}
+
+void NetworkInterface::on_arp_request_timeout(const Address& next_hop) {
+    send_arp_request(next_hop);
 }

@@ -5,7 +5,7 @@
 #include "ipv4_datagram.hh"
 #include "timer.hh"
 #include "arp_table.hh"
-
+#include "pending_arp_queue.hh"
 #include <memory>
 #include <queue>
 #include <unordered_map>
@@ -32,7 +32,9 @@
 // the network interface passes it up the stack. If it's an ARP
 // request or reply, the network interface processes the frame
 // and learns or replies as necessary.
-class NetworkInterface
+
+class NetworkInterface : public ARPRequestTimeoutObserver,
+                     public std::enable_shared_from_this<NetworkInterface>
 {
 public:
   // An abstraction for the physical output port where the NetworkInterface sends Ethernet frames
@@ -67,7 +69,10 @@ public:
   // Accessors
   const std::string& name() const { return name_; }
   const OutputPort& output() const { return *port_; }
-  OutputPort& output() { return *port_; }   
+  OutputPort& output() { return *port_; }
+
+  // 实现 ARPRequestTimeoutObserver 接口
+  void on_arp_request_timeout(const Address& next_hop) override;
 
 private:
   // Human-readable name of the interface
@@ -75,10 +80,20 @@ private:
 
   // The physical output port (+ a helper function `transmit` that uses it to send an Ethernet frame)
   std::shared_ptr<OutputPort> port_;
+  void transmit( const EthernetFrame& frame ) const { port_->transmit( *this, frame ); }
 
   // Ethernet (known as hardware, network-access-layer, or link-layer) address of the interface
   EthernetAddress ethernet_address_;
 
   // IP (known as internet-layer or network-layer) address of the interface
   Address ip_address_;
+
+  // ARP table for IP to Ethernet address resolution
+  ARPTable arp_table_;
+
+  // Queue for datagrams waiting for ARP replies
+  PendingARPQueue pending_arp_queue_;
+
+  // ARP 请求相关方法
+  void send_arp_request(const Address& next_hop);
 };

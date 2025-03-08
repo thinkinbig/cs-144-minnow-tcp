@@ -11,11 +11,6 @@ public:
     struct ARPEntry {
         EthernetAddress eth_addr {};
         NetworkTimer timer { NetworkTimer::ARP_ENTRY_TIMEOUT };
-
-        // ARPEntry 的相等运算符
-        bool operator==(const ARPEntry& other) const {
-            return eth_addr == other.eth_addr;
-        }
     };
 
     ARPTable() = default;
