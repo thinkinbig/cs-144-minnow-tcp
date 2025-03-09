@@ -4,20 +4,19 @@
 #include "ipv4_datagram.hh"
 #include "timer.hh"
 #include "address.hh"
-#include <queue>
+
 #include <optional>
-#include <vector>
 #include <memory>
 #include <unordered_map>
 
 // ARP 请求超时观察者接口
-class ARPRequestTimeoutObserver {
+class ARPRequestObserver {
 public:
-    virtual ~ARPRequestTimeoutObserver() = default;
-    virtual void on_arp_request_timeout(const Address& next_hop) = 0;
+    virtual ~ARPRequestObserver() = default;
+    virtual void on_arp_request(const Address& next_hop) = 0;
 };
 
-class PendingARPQueue {
+class ARPMessageQueue {
 public:
     // 等待 ARP 回复的数据报文
     struct PendingDatagram {
@@ -28,15 +27,16 @@ public:
 
     // 每个IP地址对应的待处理队列
     using PendingQueue = std::vector<PendingDatagram>;
+    using ARPRequestObserverPtr = std::shared_ptr<ARPRequestObserver>;
 
     // 默认构造函数
-    PendingARPQueue() = default;
+    ARPMessageQueue() = default;
 
     // 带观察者的构造函数
-    explicit PendingARPQueue(std::shared_ptr<ARPRequestTimeoutObserver> observer) 
-        : timeout_observer_(observer) {}
+    explicit ARPMessageQueue(ARPRequestObserverPtr observer) 
+        : observer_(observer) {}
 
-    ~PendingARPQueue() = default;
+    ~ARPMessageQueue() = default;
 
     // 添加待处理的数据报文
     void add_pending(const InternetDatagram& dgram, const Address& next_hop);
@@ -45,9 +45,7 @@ public:
     std::vector<PendingDatagram> pop_pending(uint32_t ip_addr);
 
     // 检查是否有等待特定 IP 的 ARP 回复
-    bool has_pending(uint32_t ip_addr) const {
-        return pending_.find(ip_addr) != pending_.end();
-    }
+    bool has_pending(uint32_t ip_addr) const;
 
     // 更新定时器
     void tick(size_t ms_since_last_tick);
@@ -65,16 +63,16 @@ public:
     bool empty() const { return pending_.empty(); }
 
     // 设置超时观察者
-    void set_timeout_observer(std::shared_ptr<ARPRequestTimeoutObserver> observer) {
-        timeout_observer_ = observer;
+    void set_observer(ARPRequestObserverPtr observer) {
+        observer_ = observer;
     }
 
     // 检查是否有观察者
     bool has_observer() const {
-        return timeout_observer_ != nullptr;
+        return observer_ != nullptr;
     }
 
 private:
     std::unordered_map<uint32_t, PendingQueue> pending_ {};
-    std::shared_ptr<ARPRequestTimeoutObserver> timeout_observer_ {};
+    ARPRequestObserverPtr observer_ {};
 };

@@ -5,7 +5,8 @@
 #include "ipv4_datagram.hh"
 #include "timer.hh"
 #include "arp_table.hh"
-#include "pending_arp_queue.hh"
+#include "arp_message_queue.hh"
+
 #include <memory>
 #include <queue>
 #include <unordered_map>
@@ -33,7 +34,8 @@
 // request or reply, the network interface processes the frame
 // and learns or replies as necessary.
 
-class NetworkInterface : public std::enable_shared_from_this<NetworkInterface>
+class NetworkInterface : public std::enable_shared_from_this<NetworkInterface>,
+                     public ARPRequestObserver
 {
 public:
   // An abstraction for the physical output port where the NetworkInterface sends Ethernet frames
@@ -44,19 +46,6 @@ public:
     virtual ~OutputPort() = default;
   };
 
-  // ARP请求超时处理器
-  class ARPRequestHandler : public ARPRequestTimeoutObserver {
-  public:
-    explicit ARPRequestHandler(std::shared_ptr<NetworkInterface> interface) 
-      : interface_(interface) {}
-    
-    void on_arp_request_timeout(const Address& next_hop) override {
-      interface_->send_arp_request(next_hop);
-    }
-  private:
-    std::shared_ptr<NetworkInterface> interface_;
-  };
-
   // Construct a network interface with given Ethernet (network-access-layer) and IP (internet-layer)
   // addresses
   NetworkInterface( std::string_view name,
@@ -65,13 +54,10 @@ public:
                     const Address& ip_address );
 
   // 初始化方法，在构造完成后调用
-  void initialize() {
-    if (initialized_) {
-      return;
-    }
-    arp_handler_ = std::make_shared<ARPRequestHandler>(shared_from_this());
-    pending_arp_queue_.set_timeout_observer(arp_handler_);
-    initialized_ = true;
+  void initialize();
+
+  void on_arp_request(const Address& next_hop) override {
+    send_arp_request(next_hop);
   }
 
   // Sends an Internet datagram, encapsulated in an Ethernet frame (if it knows the Ethernet destination
@@ -93,6 +79,9 @@ public:
   const OutputPort& output() const { return *port_; }
   OutputPort& output() { return *port_; }
 
+  // 获取数据报队列
+  std::queue<InternetDatagram>& datagrams_received() { return datagrams_received_; }
+
 private:
   // Human-readable name of the interface
   std::string name_;
@@ -111,16 +100,17 @@ private:
   ARPTable arp_table_;
 
   // Queue for datagrams waiting for ARP replies
-  PendingARPQueue pending_arp_queue_ {};
+  ARPMessageQueue arp_message_queue_ {};
 
-  // ARP 请求处理器
-  std::shared_ptr<ARPRequestHandler> arp_handler_;
-  
   // 初始化标志
-  bool initialized_ = false;
+  bool initialized_ { false };
+
+  // 接收到的数据报队列
+  std::queue<InternetDatagram> datagrams_received_ {};
 
   // ARP 相关方法
   void send_arp_request(const Address& next_hop);
+  void send_arp_reply(const ARPMessage& arp_request);  // 发送ARP回复
   void send_ipv4_datagram(const InternetDatagram& dgram, const Address& next_hop);
   void confirm_arp_reply(uint32_t ip_addr);  // 处理 ARP 回复
 };
