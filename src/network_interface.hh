@@ -53,7 +53,7 @@ public:
                     const EthernetAddress& ethernet_address,
                     const Address& ip_address );
 
-  // 初始化方法，在构造完成后调用
+  // Initialize method, called after construction
   void initialize();
 
   void on_arp_request(const Address& next_hop) override {
@@ -79,7 +79,7 @@ public:
   const OutputPort& output() const { return *port_; }
   OutputPort& output() { return *port_; }
 
-  // 获取数据报队列
+  // Get the datagram queue
   std::queue<InternetDatagram>& datagrams_received() { return datagrams_received_; }
 
 private:
@@ -102,15 +102,15 @@ private:
   // Queue for datagrams waiting for ARP replies
   ARPMessageQueue arp_message_queue_ {};
 
-  // 初始化标志
+  // Initialization flag
   bool initialized_ { false };
 
-  // 接收到的数据报队列
+  // Queue of received datagrams
   std::queue<InternetDatagram> datagrams_received_ {};
 
-  // ARP 相关方法
+  // ARP-related methods
   void send_arp_request(const Address& next_hop);
-  void send_arp_reply(const ARPMessage& arp_request);  // 发送ARP回复
+  void send_arp_reply(const ARPMessage& arp_request);  // Send ARP reply
   void send_ipv4_datagram(const InternetDatagram& dgram, const Address& next_hop);
-  void confirm_arp_reply(uint32_t ip_addr);  // 处理 ARP 回复
+  void confirm_arp_reply(uint32_t ip_addr);  // Process ARP reply
 };

@@ -9,7 +9,7 @@
 #include <memory>
 #include <unordered_map>
 
-// ARP 请求超时观察者接口
+// ARP request timeout observer interface
 class ARPRequestObserver {
 public:
     virtual ~ARPRequestObserver() = default;
@@ -18,39 +18,39 @@ public:
 
 class ARPMessageQueue {
 public:
-    // 等待 ARP 回复的数据报文
+    // Datagram waiting for ARP reply
     struct PendingDatagram {
         InternetDatagram dgram {};
         Address next_hop { "0.0.0.0", 0 };
-        NetworkTimer timer { NetworkTimer::ARP_REQUEST_TIMEOUT };  // 5秒超时
+        NetworkTimer timer { NetworkTimer::ARP_REQUEST_TIMEOUT };  // 5 seconds timeout
     };
 
-    // 每个IP地址对应的待处理队列
+    // Pending queue for each IP address
     using PendingQueue = std::vector<PendingDatagram>;
     using ARPRequestObserverPtr = std::shared_ptr<ARPRequestObserver>;
 
-    // 默认构造函数
+    // Default constructor
     ARPMessageQueue() = default;
 
-    // 带观察者的构造函数
+    // Constructor with observer
     explicit ARPMessageQueue(ARPRequestObserverPtr observer) 
         : observer_(observer) {}
 
     ~ARPMessageQueue() = default;
 
-    // 添加待处理的数据报文
+    // Add a pending datagram
     void add_pending(const InternetDatagram& dgram, const Address& next_hop);
 
-    // 获取并移除指定 IP 地址的所有待处理数据报文
+    // Get and remove all pending datagrams for the specified IP address
     std::vector<PendingDatagram> pop_pending(uint32_t ip_addr);
 
-    // 检查是否有等待特定 IP 的 ARP 回复
+    // Check if there are pending ARP replies for a specific IP
     bool has_pending(uint32_t ip_addr) const;
 
-    // 更新定时器
+    // Update timers
     void tick(size_t ms_since_last_tick);
 
-    // 获取待处理数据报文数量
+    // Get number of pending datagrams
     size_t size() const { 
         size_t total = 0;
         for (const auto& [_, queue] : pending_) {
@@ -59,15 +59,15 @@ public:
         return total;
     }
 
-    // 检查是否为空
+    // Check if empty
     bool empty() const { return pending_.empty(); }
 
-    // 设置超时观察者
+    // Set timeout observer
     void set_observer(ARPRequestObserverPtr observer) {
         observer_ = observer;
     }
 
-    // 检查是否有观察者
+    // Check if has observer
     bool has_observer() const {
         return observer_ != nullptr;
     }

@@ -16,25 +16,25 @@ public:
     ARPTable() = default;
     ~ARPTable() = default;
 
-    // 添加或更新表项
+    // Add or update entry
     void add_entry(uint32_t ip_addr, const EthernetAddress& eth_addr);
 
-    // 删除表项
+    // Remove entry
     void remove_entry(uint32_t ip_addr);
 
-    // 查找表项（带读时出清）
+    // Lookup entry (read-while-clear)
     std::optional<EthernetAddress> lookup(uint32_t ip_addr);
 
-    // 定时更新
+    // Update periodically
     void tick(size_t ms_since_last_tick);
 
-    // 获取表项数量
+    // Get number of entries
     size_t size() const { return entries_.size(); }
 
-    // 检查是否为空
+    // Check if empty
     bool empty() const { return entries_.empty(); }
 
-    // 迭代器支持
+    // Iterator support
     auto begin() const { return entries_.begin(); }
     auto end() const { return entries_.end(); }
 

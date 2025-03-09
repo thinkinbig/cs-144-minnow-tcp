@@ -7,7 +7,7 @@ using namespace std;
 void ARPMessageQueue::add_pending(const InternetDatagram& dgram, const Address& next_hop) {
     uint32_t ip = next_hop.ipv4_numeric();
     
-    // 添加到队列
+    // Add to queue
     PendingDatagram pending;
     pending.dgram = dgram;
     pending.next_hop = next_hop;
@@ -32,14 +32,14 @@ bool ARPMessageQueue::has_pending(uint32_t ip_addr) const {
 }
 
 void ARPMessageQueue::tick(size_t ms_since_last_tick) {
-    // 遍历所有待处理队列
+    // Iterate through all pending queues
     for (auto it = pending_.begin(); it != pending_.end();) {
-        // 更新队列中第一个数据包的定时器
-        // 如果第一个过期了，整个队列都过期了
+        // Update the timer of the first datagram in the queue
+        // If the first one is expired, the whole queue is expired
         if (!it->second.empty()) {
             it->second.front().timer.tick(ms_since_last_tick);
             if (it->second.front().timer.is_expired()) {
-                // 发送新的ARP请求并移除队列
+                // Send a new ARP request and remove the queue
                 if (observer_) {
                     observer_->on_arp_request(it->second.front().next_hop);
                 }

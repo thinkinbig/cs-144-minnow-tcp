@@ -40,10 +40,10 @@ void NetworkInterface::initialize() {
 
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
 void NetworkInterface::tick(const size_t ms_since_last_tick) {
-    // 更新 ARP 表
+    // Update ARP table
     arp_table_.tick(ms_since_last_tick);
     
-    // 更新待处理队列
+    // Update pending queue
     arp_message_queue_.tick(ms_since_last_tick);
 }
 
@@ -55,12 +55,12 @@ void NetworkInterface::send_datagram(const InternetDatagram& dgram, const Addres
     if (arp_table_.lookup(next_hop.ipv4_numeric()).has_value()) {
         send_ipv4_datagram(dgram, next_hop);
     } else {
-        // 无论是否已经有待处理的数据报，都要将新的数据报加入队列
+        // Whether there is a pending datagram or not, add the new datagram to the queue
         bool had_pending = arp_message_queue_.has_pending(next_hop.ipv4_numeric());
         arp_message_queue_.add_pending(dgram, next_hop);
         
-        // 如果没有待处理的数据报，说明这是第一个请求，需要发送 ARP 请求
-        // 如果已经有待处理的数据报，说明 ARP 请求已经发送，等待超时重试即可
+        // If there is no pending datagram, it means this is the first request, so send ARP request
+        // If there is a pending datagram, it means ARP request has been sent, wait for timeout retry
         if (!had_pending) {
             send_arp_request(next_hop);
         }
@@ -68,7 +68,7 @@ void NetworkInterface::send_datagram(const InternetDatagram& dgram, const Addres
 }
 
 void NetworkInterface::send_arp_request(const Address& next_hop) {
-    // 发送 ARP 请求
+    // Send ARP request
     ARPMessage arp_request;
     arp_request.opcode = ARPMessage::OPCODE_REQUEST;
     arp_request.sender_ethernet_address = ethernet_address_;
@@ -85,7 +85,7 @@ void NetworkInterface::send_arp_request(const Address& next_hop) {
 }
 
 void NetworkInterface::send_ipv4_datagram(const InternetDatagram& dgram, const Address& next_hop) {
-    // 发送 IPv4 数据报
+    // Send IPv4 datagram
     assert(arp_table_.lookup(next_hop.ipv4_numeric()).has_value());
     EthernetFrame frame;
     frame.header.type = EthernetHeader::TYPE_IPv4;
@@ -96,10 +96,10 @@ void NetworkInterface::send_ipv4_datagram(const InternetDatagram& dgram, const A
 }
 
 void NetworkInterface::confirm_arp_reply(uint32_t ip_addr) {
-    // 获取所有等待该 IP 的数据报
+    // Get all datagrams waiting for this IP
     auto pending_datagrams = arp_message_queue_.pop_pending(ip_addr);
     
-    // 发送所有数据报
+    // Send all datagrams
     for (const auto& pending : pending_datagrams) {
         send_ipv4_datagram(pending.dgram, pending.next_hop);
     }
@@ -122,7 +122,7 @@ void NetworkInterface::send_arp_reply(const ARPMessage& arp_request) {
 }
 
 void NetworkInterface::recv_frame(EthernetFrame frame) {
-    // 检查是否是发给我们的帧
+    // Check if the frame is for us
     if (frame.header.dst != ethernet_address_ && frame.header.dst != ETHERNET_BROADCAST) {
         return;
     }
@@ -135,15 +135,15 @@ void NetworkInterface::recv_frame(EthernetFrame frame) {
     } else if (frame.header.type == EthernetHeader::TYPE_ARP) {
       ARPMessage arp_msg;
       if (parse(arp_msg, frame.payload)) {
-        // 学习发送方的映射
+        // Learn the mapping of the sender
         arp_table_.add_entry(arp_msg.sender_ip_address, arp_msg.sender_ethernet_address);
 
         if (arp_msg.opcode == ARPMessage::OPCODE_REPLY) {
-          // 收到ARP回复，发送等待的数据报
+          // Received ARP reply, send waiting datagrams
           confirm_arp_reply(arp_msg.sender_ip_address);
         } else if (arp_msg.opcode == ARPMessage::OPCODE_REQUEST && 
                   arp_msg.target_ip_address == ip_address_.ipv4_numeric()) {
-          // 发送 ARP 回复
+          // Send ARP reply
           send_arp_reply(arp_msg);
         }
       }
