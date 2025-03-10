@@ -72,23 +72,17 @@ void Router::route_datagram(InternetDatagram& datagram, size_t interface_num) {
     if (datagram.header.ttl <= 1) {
       return;
     }
-    
-    // If it's a directly connected network (no next_hop) and target is on the same segment,
-    // send it back through the interface it came from
-    if (!route->next_hop.has_value() && route->interface_num == interface_num) {
-      datagram.header.ttl--;
-      datagram.header.compute_checksum();
-      interfaces_[interface_num]->send_datagram(datagram, Address::from_ipv4_numeric(datagram.header.dst));
+    datagram.header.ttl--;
+    datagram.header.compute_checksum();
+
+    // Calculate next hop address
+    Address nexthop = route->next_hop.has_value() ? *route->next_hop : Address::from_ipv4_numeric(datagram.header.dst);
+
+    // If directly connected network and on same interface, send through incoming interface
+    // If different interface, forward according to routing table
+    if ((!route->next_hop.has_value() && route->interface_num == interface_num) || route->interface_num != interface_num) {
+      interfaces_[interface_num]->send_datagram(datagram, nexthop);
     }
-    // Otherwise, if not sending back to source interface, forward according to routing table
-    else if (route->interface_num != interface_num) {
-      datagram.header.ttl--;
-      datagram.header.compute_checksum();
-      if (route->next_hop.has_value()) {
-        interfaces_[route->interface_num]->send_datagram(datagram, *route->next_hop);
-      } else {
-        interfaces_[route->interface_num]->send_datagram(datagram, Address::from_ipv4_numeric(datagram.header.dst));
-      }
-    }
+
   }
 }
