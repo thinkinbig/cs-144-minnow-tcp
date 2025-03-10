@@ -6,6 +6,7 @@
 #include "timer.hh"
 #include "arp_table.hh"
 #include "arp_message_queue.hh"
+#include "arp_message.hh"
 
 #include <memory>
 #include <queue>

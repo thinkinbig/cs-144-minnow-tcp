@@ -4,7 +4,7 @@
 void ARPTable::add_entry(uint32_t ip_addr, const EthernetAddress& eth_addr) {
     auto& entry = entries_[ip_addr];
     entry.eth_addr = eth_addr;
-    entry.timer.start();  // 启动/重置定时器
+    entry.timer.start();
 }
 
 std::optional<EthernetAddress> ARPTable::lookup(uint32_t ip_addr) {
@@ -13,7 +13,6 @@ std::optional<EthernetAddress> ARPTable::lookup(uint32_t ip_addr) {
         return std::nullopt;
     }
 
-    // 读时出清：检查是否过期
     if (it->second.timer.is_expired()) {
         entries_.erase(it);
         return std::nullopt;
@@ -27,7 +26,6 @@ void ARPTable::remove_entry(uint32_t ip_addr) {
 }
 
 void ARPTable::tick(size_t ms_since_last_tick) {
-    // 更新所有定时器
     for (auto it = entries_.begin(); it != entries_.end();) {
         auto& entry = it->second;
         entry.timer.tick(ms_since_last_tick);

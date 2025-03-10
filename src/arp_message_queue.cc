@@ -12,7 +12,7 @@ void ARPMessageQueue::add_pending(const InternetDatagram& dgram, const Address& 
     pending.dgram = dgram;
     pending.next_hop = next_hop;
     pending.timer.start();
-    pending_[ip].push_back(std::move(pending));
+    pending_[ip].push_back(move(pending));
 }
 
 vector<ARPMessageQueue::PendingDatagram> ARPMessageQueue::pop_pending(uint32_t ip_addr) {

@@ -19,12 +19,76 @@ void Router::add_route( const uint32_t route_prefix,
   cerr << "DEBUG: adding route " << Address::from_ipv4_numeric( route_prefix ).ip() << "/"
        << static_cast<int>( prefix_length ) << " => " << ( next_hop.has_value() ? next_hop->ip() : "(direct)" )
        << " on interface " << interface_num << "\n";
+  
+  if (prefix_length > 32) {
+    return;
+  }
 
-  debug( "unimplemented add_route() called" );
+  RouteEntry route_entry = { route_prefix, next_hop, interface_num };
+  routes_[prefix_length].push_back(route_entry);
 }
 
 // Go through all the interfaces, and route every incoming datagram to its proper outgoing interface.
 void Router::route()
 {
-  debug( "unimplemented route() called" );
+  // Iterate through all interfaces
+  for (size_t i = 0; i < interfaces_.size(); i++) {
+    auto& interface = interfaces_[i];
+    // Get all datagrams received on this interface
+    auto& datagrams = interface->datagrams_received();
+    // Process all datagrams on this interface
+    while (!datagrams.empty()) {
+      InternetDatagram datagram = std::move(datagrams.front());
+      datagrams.pop();
+      route_datagram(datagram, i);
+    }
+  }
+}
+
+std::optional<Router::RouteEntry> Router::find_route(const uint32_t& destination) {
+  
+  for (int prefix_length = 32; prefix_length >= 0; prefix_length--) {
+    auto it = routes_.find(prefix_length);
+    if (it != routes_.end()) {
+      for (const auto& route : it->second) {
+        uint32_t mask = (prefix_length == 32) ? 0xFFFFFFFF : ~(0xFFFFFFFF >> prefix_length);
+        uint32_t dest_masked = destination & mask;
+        uint32_t route_masked = route.route_prefix & mask;
+        
+        if (dest_masked == route_masked) {
+          return route;
+        }
+      }
+    }
+  }
+  return std::nullopt;
+}
+
+void Router::route_datagram(InternetDatagram& datagram, size_t interface_num) {
+  uint32_t destination = datagram.header.dst;
+  auto route = find_route(destination);
+  if (route) {
+    // Check TTL
+    if (datagram.header.ttl <= 1) {
+      return;
+    }
+    
+    // If it's a directly connected network (no next_hop) and target is on the same segment,
+    // send it back through the interface it came from
+    if (!route->next_hop.has_value() && route->interface_num == interface_num) {
+      datagram.header.ttl--;
+      datagram.header.compute_checksum();
+      interfaces_[interface_num]->send_datagram(datagram, Address::from_ipv4_numeric(datagram.header.dst));
+    }
+    // Otherwise, if not sending back to source interface, forward according to routing table
+    else if (route->interface_num != interface_num) {
+      datagram.header.ttl--;
+      datagram.header.compute_checksum();
+      if (route->next_hop.has_value()) {
+        interfaces_[route->interface_num]->send_datagram(datagram, *route->next_hop);
+      } else {
+        interfaces_[route->interface_num]->send_datagram(datagram, Address::from_ipv4_numeric(datagram.header.dst));
+      }
+    }
+  }
 }
