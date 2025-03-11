@@ -83,7 +83,10 @@ public:
   NetworkInterfaceAdapter( const Address& ip_address, const Address& next_hop ) // NOLINT(*-swappable-*)
     : _interface( "network interface adapter", sender_, random_host_ethernet_address(), ip_address )
     , _next_hop( next_hop )
-  {}
+  {
+    // Bind arp request observer to ARP Message Queue
+    _interface.initialize();
+  }
 
   optional<TCPMessage> read()
   {

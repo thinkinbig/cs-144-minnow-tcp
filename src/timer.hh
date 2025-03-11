@@ -2,20 +2,21 @@
 
 #include "tcp_sender_message.hh"
 
-#include <functional>
 #include <cstddef>
+#include <functional>
 
 class TCPSender;
 
 // 基础计时器抽象类
-class Timer {
+class Timer
+{
 public:
-  explicit Timer(size_t timeout_ms) : timeout_ms_(timeout_ms) {}
+  explicit Timer( size_t timeout_ms ) : timeout_ms_( timeout_ms ) {}
   virtual ~Timer() = default;
-  
+
   void start();
   void stop();
-  void tick(size_t ms_since_last_tick);
+  void tick( size_t ms_since_last_tick );
   bool is_expired() const;
   bool is_running() const;
   size_t get_timeout_ms() const;
@@ -31,7 +32,7 @@ protected:
 class RetransmissionTimer : public Timer
 {
 public:
-  explicit RetransmissionTimer(uint64_t initial_RTO_ms);
+  explicit RetransmissionTimer( uint64_t initial_RTO_ms );
 
   void reset();
   void double_RTO();
@@ -47,12 +48,13 @@ private:
 };
 
 // 网络接口定时器
-class NetworkTimer : public Timer {
+class NetworkTimer : public Timer
+{
 public:
-  static constexpr size_t ARP_REQUEST_TIMEOUT = 5000;   // 5 seconds
-  static constexpr size_t ARP_ENTRY_TIMEOUT = 30000;    // 30 seconds
+  static constexpr size_t ARP_REQUEST_TIMEOUT = 5000; // 5 seconds
+  static constexpr size_t ARP_ENTRY_TIMEOUT = 30000;  // 30 seconds
 
-  explicit NetworkTimer(size_t timeout_ms) : Timer(timeout_ms) {}
+  explicit NetworkTimer( size_t timeout_ms ) : Timer( timeout_ms ) {}
 
   static NetworkTimer create_request_timer();
   static NetworkTimer create_entry_timer();

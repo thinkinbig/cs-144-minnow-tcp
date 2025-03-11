@@ -1,17 +1,17 @@
 #pragma once
 
 #include "address.hh"
+#include "arp_message.hh"
+#include "arp_message_queue.hh"
+#include "arp_table.hh"
 #include "ethernet_frame.hh"
 #include "ipv4_datagram.hh"
 #include "timer.hh"
-#include "arp_table.hh"
-#include "arp_message_queue.hh"
-#include "arp_message.hh"
 
 #include <memory>
+#include <optional>
 #include <queue>
 #include <unordered_map>
-#include <optional>
 
 // A "network interface" that connects IP (the internet layer, or network layer)
 // with Ethernet (the network access layer, or link layer).
@@ -35,8 +35,9 @@
 // request or reply, the network interface processes the frame
 // and learns or replies as necessary.
 
-class NetworkInterface : public std::enable_shared_from_this<NetworkInterface>,
-                     public ARPRequestObserver
+class NetworkInterface
+  : public std::enable_shared_from_this<NetworkInterface>
+  , public ARPRequestObserver
 {
 public:
   // An abstraction for the physical output port where the NetworkInterface sends Ethernet frames
@@ -57,9 +58,7 @@ public:
   // Initialize method, called after construction
   void initialize();
 
-  void on_arp_request(const Address& next_hop) override {
-    send_arp_request(next_hop);
-  }
+  void on_arp_request( const Address& next_hop ) override { send_arp_request( next_hop ); }
 
   // Sends an Internet datagram, encapsulated in an Ethernet frame (if it knows the Ethernet destination
   // address). Will need to use [ARP](\ref rfc::rfc826) to look up the Ethernet destination address for the next
@@ -110,8 +109,8 @@ private:
   std::queue<InternetDatagram> datagrams_received_ {};
 
   // ARP-related methods
-  void send_arp_request(const Address& next_hop);
-  void send_arp_reply(const ARPMessage& arp_request);  // Send ARP reply
-  void send_ipv4_datagram(const InternetDatagram& dgram, const Address& next_hop);
-  void confirm_arp_reply(uint32_t ip_addr);  // Process ARP reply
+  void send_arp_request( const Address& next_hop );
+  void send_arp_reply( const ARPMessage& arp_request ); // Send ARP reply
+  void send_ipv4_datagram( const InternetDatagram& dgram, const Address& next_hop );
+  void confirm_arp_reply( uint32_t ip_addr ); // Process ARP reply
 };

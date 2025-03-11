@@ -1,39 +1,41 @@
 #include "timer.hh"
 
-void Timer::start() 
+void Timer::start()
 {
   running_ = true;
   elapsed_time_ms_ = 0;
 }
 
-void Timer::stop() 
+void Timer::stop()
 {
   running_ = false;
   elapsed_time_ms_ = 0;
 }
 
-void Timer::tick(size_t ms_since_last_tick) 
+void Timer::tick( size_t ms_since_last_tick )
 {
-  if (!running_) { return; }
+  if ( !running_ ) {
+    return;
+  }
   elapsed_time_ms_ += ms_since_last_tick;
 }
 
-bool Timer::is_expired() const 
+bool Timer::is_expired() const
 {
-  return running_ && (elapsed_time_ms_ >= timeout_ms_);
+  return running_ && ( elapsed_time_ms_ >= timeout_ms_ );
 }
 
-bool Timer::is_running() const 
+bool Timer::is_running() const
 {
   return running_;
 }
 
-size_t Timer::get_timeout_ms() const 
+size_t Timer::get_timeout_ms() const
 {
   return timeout_ms_;
 }
 
-size_t Timer::get_elapsed_ms() const 
+size_t Timer::get_elapsed_ms() const
 {
   return elapsed_time_ms_;
 }
@@ -69,10 +71,10 @@ uint64_t RetransmissionTimer::consecutive_retransmissions() const
 
 NetworkTimer NetworkTimer::create_request_timer()
 {
-  return NetworkTimer(ARP_REQUEST_TIMEOUT);
+  return NetworkTimer( ARP_REQUEST_TIMEOUT );
 }
 
 NetworkTimer NetworkTimer::create_entry_timer()
 {
-  return NetworkTimer(ARP_ENTRY_TIMEOUT);
+  return NetworkTimer( ARP_ENTRY_TIMEOUT );
 }
