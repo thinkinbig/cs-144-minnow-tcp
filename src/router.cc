@@ -38,7 +38,7 @@ void Router::route()
     auto& datagrams = interface->datagrams_received();
     // Process all datagrams on this interface
     while (!datagrams.empty()) {
-      InternetDatagram datagram = std::move(datagrams.front());
+      InternetDatagram datagram = move(datagrams.front());
       datagrams.pop();
       route_datagram(datagram, i);
     }
@@ -61,7 +61,7 @@ std::optional<Router::RouteEntry> Router::find_route(const uint32_t& destination
       }
     }
   }
-  return std::nullopt;
+  return nullopt;
 }
 
 void Router::route_datagram(InternetDatagram& datagram, size_t interface_num) {

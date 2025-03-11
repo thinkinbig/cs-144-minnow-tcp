@@ -46,10 +46,9 @@ private:
   uint64_t consecutive_retransmissions_ { 0 };
 };
 
-// 通用的网络接口定时器
+// 网络接口定时器
 class NetworkTimer : public Timer {
 public:
-  // 预定义的超时时间
   static constexpr size_t ARP_REQUEST_TIMEOUT = 5000;   // 5 seconds
   static constexpr size_t ARP_ENTRY_TIMEOUT = 30000;    // 30 seconds
 
