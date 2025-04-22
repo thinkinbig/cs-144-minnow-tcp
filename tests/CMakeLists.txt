@@ -73,5 +73,7 @@ add_test_exec(router)
 
 add_test_exec(no_skip)
 
+add_test_exec(object_pool_test)
+
 add_speed_test(byte_stream_speed_test)
 add_speed_test(reassembler_speed_test)
