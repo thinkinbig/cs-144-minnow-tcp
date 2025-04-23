@@ -44,8 +44,8 @@ void ARPMessageQueue::tick( size_t ms_since_last_tick )
       it->second.front().timer.tick( ms_since_last_tick );
       if ( it->second.front().timer.is_expired() ) {
         // Send a new ARP request and remove the queue
-        if ( observer_ ) {
-          observer_->on_arp_request( it->second.front().next_hop );
+        if ( callback_ ) {
+          callback_( it->second.front().next_hop );
         }
         it = pending_.erase( it );
         continue;

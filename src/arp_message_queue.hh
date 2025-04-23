@@ -5,17 +5,10 @@
 #include "ipv4_datagram.hh"
 #include "timer.hh"
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <unordered_map>
-
-// ARP request timeout observer interface
-class ARPRequestObserver
-{
-public:
-  virtual ~ARPRequestObserver() = default;
-  virtual void on_arp_request( const Address& next_hop ) = 0;
-};
 
 class ARPMessageQueue
 {
@@ -30,13 +23,13 @@ public:
 
   // Pending queue for each IP address
   using PendingQueue = std::vector<PendingDatagram>;
-  using ARPRequestObserverPtr = std::shared_ptr<ARPRequestObserver>;
+  using ARPRequestCallback = std::function<void(const Address&)>;
 
   // Default constructor
   ARPMessageQueue() = default;
 
   // Constructor with observer
-  explicit ARPMessageQueue( ARPRequestObserverPtr observer ) : observer_( observer ) {}
+  explicit ARPMessageQueue( ARPRequestCallback callback ) : callback_( std::move(callback) ) {}
 
   ~ARPMessageQueue() = default;
 
@@ -66,10 +59,10 @@ public:
   bool empty() const { return pending_.empty(); }
 
   // Set timeout observer
-  void set_observer( ARPRequestObserverPtr observer ) { observer_ = observer; }
+  void set_callback( ARPRequestCallback callback ) { callback_ = std::move(callback); }
 
 
 private:
   std::unordered_map<uint32_t, PendingQueue> pending_ {};
-  ARPRequestObserverPtr observer_ {};
+  ARPRequestCallback callback_ {};
 };

@@ -30,7 +30,11 @@ void NetworkInterface::initialize()
   if ( initialized_ ) {
     return;
   }
-  arp_message_queue_.set_observer( weak_from_this().lock() );
+  arp_message_queue_.set_callback( [this_weak = weak_from_this()]( const Address& next_hop ) {
+    if ( auto this_shared = this_weak.lock() ) {
+      this_shared->send_arp_request( next_hop );
+    }
+  } );
   initialized_ = true;
 }
 

@@ -37,7 +37,6 @@
 
 class NetworkInterface
   : public std::enable_shared_from_this<NetworkInterface>
-  , public ARPRequestObserver
 {
 public:
   // An abstraction for the physical output port where the NetworkInterface sends Ethernet frames
@@ -57,8 +56,6 @@ public:
 
   // Initialize method, called after construction
   void initialize();
-
-  void on_arp_request( const Address& next_hop ) override { send_arp_request( next_hop ); }
 
   // Sends an Internet datagram, encapsulated in an Ethernet frame (if it knows the Ethernet destination
   // address). Will need to use [ARP](\ref rfc::rfc826) to look up the Ethernet destination address for the next
