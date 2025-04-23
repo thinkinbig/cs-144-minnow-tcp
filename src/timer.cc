@@ -50,6 +50,7 @@ RetransmissionTimer::RetransmissionTimer( uint64_t initial_RTO_ms )
 void RetransmissionTimer::reset()
 {
   current_RTO_ms_ = initial_RTO_ms_;
+  timeout_ms_ = current_RTO_ms_;
   consecutive_retransmissions_ = 0;
   elapsed_time_ms_ = 0;
 }
@@ -57,6 +58,7 @@ void RetransmissionTimer::reset()
 void RetransmissionTimer::double_RTO()
 {
   current_RTO_ms_ <<= 1;
+  timeout_ms_ = current_RTO_ms_;
 }
 
 void RetransmissionTimer::increment_retransmissions()

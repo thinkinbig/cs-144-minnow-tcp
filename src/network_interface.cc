@@ -1,11 +1,9 @@
-#include <iostream>
-
+#include "network_interface.hh"
 #include "arp_message.hh"
 #include "debug.hh"
 #include "ethernet_frame.hh"
 #include "exception.hh"
 #include "helpers.hh"
-#include "network_interface.hh"
 
 #include <cassert>
 
@@ -25,10 +23,7 @@ NetworkInterface::NetworkInterface( string_view name,
   , arp_message_queue_()
   , initialized_( false )
   , datagrams_received_()
-{
-  cerr << "DEBUG: Network interface has Ethernet address " << to_string( ethernet_address_ ) << " and IP address "
-       << ip_address.ip() << "\n";
-}
+{}
 
 void NetworkInterface::initialize()
 {
@@ -149,10 +144,13 @@ void NetworkInterface::recv_frame( EthernetFrame frame )
       if ( arp_msg.opcode == ARPMessage::OPCODE_REPLY ) {
         // Received ARP reply, send waiting datagrams
         confirm_arp_reply( arp_msg.sender_ip_address );
-      } else if ( arp_msg.opcode == ARPMessage::OPCODE_REQUEST
-                  && arp_msg.target_ip_address == ip_address_.ipv4_numeric() ) {
-        // Send ARP reply
-        send_arp_reply( arp_msg );
+      } else if ( arp_msg.opcode == ARPMessage::OPCODE_REQUEST ) {
+        if ( arp_msg.target_ip_address == ip_address_.ipv4_numeric() ) {
+          // Send ARP reply if the request is for us
+          send_arp_reply( arp_msg );
+        }
+        // Send waiting datagrams for the sender's IP
+        confirm_arp_reply( arp_msg.sender_ip_address );
       }
     }
   }

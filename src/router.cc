@@ -1,8 +1,6 @@
 #include "router.hh"
 #include "debug.hh"
 
-#include <iostream>
-
 using namespace std;
 
 // route_prefix: The "up-to-32-bit" IPv4 address prefix to match the datagram's destination address against
@@ -16,9 +14,6 @@ void Router::add_route( const uint32_t route_prefix,
                         const optional<Address> next_hop,
                         const size_t interface_num )
 {
-  cerr << "DEBUG: adding route " << Address::from_ipv4_numeric( route_prefix ).ip() << "/"
-       << static_cast<int>( prefix_length ) << " => " << ( next_hop.has_value() ? next_hop->ip() : "(direct)" )
-       << " on interface " << interface_num << "\n";
 
   if ( prefix_length > 32 ) {
     return;
@@ -69,23 +64,27 @@ void Router::route_datagram( InternetDatagram& datagram, size_t interface_num )
 {
   uint32_t destination = datagram.header.dst;
   auto route = find_route( destination );
-  if ( route ) {
-    // Check TTL
-    if ( datagram.header.ttl <= 1 ) {
-      return;
-    }
-    datagram.header.ttl--;
-    datagram.header.compute_checksum();
-
-    // Calculate next hop address
-    Address nexthop
-      = route->next_hop.has_value() ? *route->next_hop : Address::from_ipv4_numeric( datagram.header.dst );
-
-    // If directly connected network and on same interface, send through incoming interface
-    // If different interface, forward according to routing table
-    if ( ( !route->next_hop.has_value() && route->interface_num == interface_num )
-         || route->interface_num != interface_num ) {
-      interfaces_[interface_num]->send_datagram( datagram, nexthop );
-    }
+  if ( !route ) {
+    return; // Drop datagram if no route found
   }
+
+  // Check if the route would send the datagram back to the interface it came from
+  // Only prevent routing loop when forwarding to a different subnet
+  if ( route->interface_num == interface_num && route->next_hop.has_value() ) {
+    return; // Drop datagram to prevent routing loop
+  }
+
+  // Check TTL
+  if ( datagram.header.ttl <= 1 ) {
+    return;
+  }
+  datagram.header.ttl--;
+  datagram.header.compute_checksum();
+
+  // Calculate next hop address
+  Address nexthop
+    = route->next_hop.has_value() ? *route->next_hop : Address::from_ipv4_numeric( datagram.header.dst );
+
+  // Send through the interface specified by the route
+  interfaces_[route->interface_num]->send_datagram( datagram, nexthop );
 }

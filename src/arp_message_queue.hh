@@ -68,8 +68,6 @@ public:
   // Set timeout observer
   void set_observer( ARPRequestObserverPtr observer ) { observer_ = observer; }
 
-  // Check if has observer
-  bool has_observer() const { return observer_ != nullptr; }
 
 private:
   std::unordered_map<uint32_t, PendingQueue> pending_ {};
