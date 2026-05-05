@@ -1,73 +1,73 @@
+// Simple line-driven echo client.
+//
+// Refactored to use the project's TCPSocket/Address utilities instead of raw
+// POSIX sockets. Reads a line from stdin, sends it as an Echo message, and
+// prints the server's reply.
+
+#include "address.hh"
+#include "helper.hh"
+#include "socket.hh"
+
 #include <iostream>
-#include <cstring>
-#include <unistd.h>
+#include <stdexcept>
+#include <string>
 
+namespace {
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-
-
-#include "./helper.cpp"
-
-int main() {
-
-  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-
-  if (sockfd == -1) {
-    std::cerr << "socket failed\n";
-    return 1;
+void send_message( TCPSocket& sock, const Message& msg )
+{
+  std::string framed = encode_message( msg );
+  while ( !framed.empty() ) {
+    const size_t n = sock.write( framed );
+    if ( n == 0 ) {
+      throw std::runtime_error( "write returned 0 on blocking socket" );
+    }
+    framed.erase( 0, n );
   }
+}
 
-  sockaddr_in server_addr{};
-
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(8080);
-
-  if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
-    std::cerr << "invalid address\n";
-    close(sockfd);
-    return 1;
+bool recv_one_message( TCPSocket& sock, std::string& read_buffer, Message& out )
+{
+  while ( true ) {
+    if ( try_parse_message( read_buffer, out ) ) {
+      return true;
+    }
+    std::string chunk;
+    sock.read( chunk );
+    if ( chunk.empty() ) {
+      return false; // EOF
+    }
+    read_buffer.append( chunk );
   }
+}
 
-  if (connect(sockfd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-    std::cerr << "connect failed\n";
-    close(sockfd);
-    return 1;
-  }
+} // namespace
 
-  std::cout << "Connected to server\n";
+int main()
+{
+  TCPSocket sock;
+  sock.connect( Address { "127.0.0.1", 8080 } );
+  std::cerr << "[client] connected to " << sock.peer_address().to_string() << "\n";
 
+  std::string read_buffer;
   std::string line;
-  
-  while (std::getline(std::cin, line)) {
-    if (line == "quit" || line.empty()) break;
-
-    Message message;
-
-    message.type = MessageType::Echo;
-    message.body = line;
-
-    if (!send_message(sockfd, message)) {
-      std::cerr << "send failed\n";
+  while ( std::getline( std::cin, line ) ) {
+    if ( line.empty() ) {
       break;
     }
+
+    Message out { line == "quit" ? MessageType::Quit : MessageType::Echo, line };
+    send_message( sock, out );
 
     Message reply;
-    
-    if (!recv_message(sockfd, reply)) {
-      std::cerr << "recv failed\n";
+    if ( !recv_one_message( sock, read_buffer, reply ) ) {
+      std::cerr << "[client] server closed connection\n";
       break;
     }
+    std::cout << "[client] reply: " << reply.body << "\n";
 
-
-    std::cout << "Socket received: " << reply.body << "\n";
-
-    
+    if ( out.type == MessageType::Quit ) {
+      break;
+    }
   }
-
-   close(sockfd);
-
-  return 0;
-   
 }

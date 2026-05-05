@@ -22,5 +22,6 @@ add_subdirectory("${PROJECT_SOURCE_DIR}/util")
 add_subdirectory("${PROJECT_SOURCE_DIR}/src")
 add_subdirectory("${PROJECT_SOURCE_DIR}/tests")
 add_subdirectory("${PROJECT_SOURCE_DIR}/apps")
+add_subdirectory("${PROJECT_SOURCE_DIR}/demo")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

@@ -1,97 +1,95 @@
-#include <asm-generic/socket.h>
+// Blocking server backed by a fixed-size worker pool.
+//
+// Differences from the naive "one thread per connection, detached" version:
+//   - Bounded number of worker threads → no DoS by connection flood.
+//   - Bounded task queue → backpressure: when both worker and queue are
+//     saturated, accept blocks, the kernel's listen backlog absorbs the
+//     surge, and further connects get refused at the OS level.
+//   - Workers join on pool destruction → no detached threads escaping.
+
+#include "address.hh"
+#include "helper.hh"
+#include "socket.hh"
+#include "worker_pool.hh"
+
+#include <csignal>
 #include <iostream>
-#include <cstring>
-#include <thread>
-#include <unistd.h>
+#include <stdexcept>
+#include <utility>
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+namespace {
 
+constexpr size_t kWorkerCount = 64;
+constexpr size_t kQueueCapacity = 256;
 
-#include "./helper.cpp"
+void serve_client( TCPSocket client )
+{
+  const std::string peer = client.peer_address().to_string();
+  std::cerr << "[server] client connected: " << peer << "\n";
 
+  std::string read_buffer;
+  std::string write_buffer;
+  bool closing = false;
 
+  try {
+    while ( !closing ) {
+      std::string chunk;
+      client.read( chunk );
 
-void handle_client(int client_fd) {
-  while (true) {
-    Message received;
+      if ( chunk.empty() ) {
+        if ( client.eof() ) {
+          break;
+        }
+        continue;
+      }
+      read_buffer.append( chunk );
 
-    received.type = MessageType::Echo;
+      Message msg;
+      while ( try_parse_message( read_buffer, msg ) ) {
+        std::cout << "[server] received from " << peer << ": " << msg.body << "\n";
+        const Message reply = handle_message( msg );
+        write_buffer.append( encode_message( reply ) );
+        if ( msg.type == MessageType::Quit ) {
+          closing = true;
+          break;
+        }
+      }
 
-    if (!recv_message(client_fd, received)) {
-      std::cerr << "received from client failed\n";
-      break; 
+      while ( !write_buffer.empty() ) {
+        const size_t n = client.write( write_buffer );
+        if ( n == 0 ) {
+          throw std::runtime_error( "write returned 0 on blocking socket" );
+        }
+        write_buffer.erase( 0, n );
+      }
     }
-
-    std::cout << "Server received: " << received.body << "\n";
-
-
-    if (!send_message(client_fd, received)) {
-      std::cerr << "failed to sent a message to client\n";
-      break;
-    }
-
-    
+  } catch ( const std::exception& e ) {
+    std::cerr << "[server] client " << peer << " error: " << e.what() << "\n";
   }
 
-
-  close(client_fd);
+  std::cerr << "[server] client disconnected: " << peer << "\n";
 }
 
+} // namespace
 
-int main() {
+int main()
+{
+  std::signal( SIGPIPE, SIG_IGN );
 
-  int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+  TCPSocket listener;
+  listener.set_reuseaddr();
+  listener.bind( Address { "0.0.0.0", 8080 } );
+  listener.listen();
 
-  if (server_fd == -1) {
-    std::cerr << "socket failed\n";
-    return 1;
-  }
+  std::cerr << "[server] listening on " << listener.local_address().to_string() << " (workers=" << kWorkerCount
+            << ", queue=" << kQueueCapacity << ")\n";
 
-  int opt = 1;
-  setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+  WorkerPool<TCPSocket> pool { kWorkerCount, kQueueCapacity, serve_client };
 
-  sockaddr_in address{};
-  address.sin_family = AF_INET;
-  address.sin_addr.s_addr = INADDR_ANY;
-  address.sin_port = htons(8080);
-
-
-  if (bind(server_fd, (sockaddr*)&address, sizeof(address)) == -1) {
-    std::cerr << "bind failed\n";
-    close(server_fd);
-    return 1;
-  }
-
-  if (listen(server_fd, 5) == -1) {
-    std::cerr << "listen failed\n";
-    close(server_fd);
-    return 1;
-  }
-
-  std::cout << "Server listening on port 8080...\n";
-
-  while (true) {
-    sockaddr_in client_addr{};
-    socklen_t client_len = sizeof(client_addr);
-  
-    int client_fd = accept(server_fd, (sockaddr*)&client_addr, &client_len);
-  
-    if (client_fd == -1) {
-      std::cerr << "accept failed\n";
-      close(server_fd);
-      return 1;
+  while ( true ) {
+    TCPSocket client = listener.accept();
+    if ( !pool.submit( std::move( client ) ) ) {
+      break; // pool has been shut down
     }
-
-    std::cout << "Client connected\n";
-
-    std::thread t(handle_client, client_fd);
-    t.detach();
   }
-  
-  close(server_fd);
-  
-  return 0;
-  
 }

@@ -12,6 +12,13 @@
 #include <optional>
 #include <thread>
 
+#ifdef __linux__
+#include "epoll_eventloop.hh"
+using TCPEventLoop = EpollEventLoop;
+#else
+using TCPEventLoop = EventLoop;
+#endif
+
 //! Multithreaded wrapper around TCPPeer that approximates the Unix sockets API
 template<TCPDatagramAdapter AdaptT>
 class TCPMinnowSocket : public LocalStreamSocket
@@ -70,8 +77,9 @@ private:
   //! TCP state machine
   std::optional<TCPPeer> _tcp {};
 
-  //! eventloop that handles all the events (new inbound datagram, new outbound bytes, new inbound bytes)
-  EventLoop _eventloop {};
+  //! eventloop that handles all the events (new inbound datagram, new outbound bytes, new inbound bytes).
+  //! On Linux this is the epoll-backed implementation; otherwise the poll-backed one.
+  TCPEventLoop _eventloop {};
 
   //! Process events while specified condition is true
   void _tcp_loop( const std::function<bool()>& condition );

@@ -48,13 +48,17 @@ protected:
   static constexpr size_t kReadBufferSize = 16384;
 
   void set_eof() { internal_fd_->eof_ = true; }
-  void register_read() { ++internal_fd_->read_count_; }   // increment read count
-  void register_write() { ++internal_fd_->write_count_; } // increment write count
 
   template<typename T>
   T CheckSystemCall( std::string_view s_attempt, T return_value ) const;
 
 public:
+  // Bookkeeping used by EventLoop's busy-wait detection. Exposed publicly so
+  // user code that bypasses FileDescriptor::read/write (e.g. accept loops)
+  // can mark progress on a rule.
+  void register_read() { ++internal_fd_->read_count_; }   // increment read count
+  void register_write() { ++internal_fd_->write_count_; } // increment write count
+
   // Construct from a file descriptor number returned by the kernel
   explicit FileDescriptor( int fd );
 

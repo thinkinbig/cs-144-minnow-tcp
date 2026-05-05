@@ -26,7 +26,7 @@ void TCPMinnowSocket<AdaptT>::_tcp_loop( const std::function<bool()>& condition 
   auto base_time = timestamp_ms();
   while ( condition() ) {
     auto ret = _eventloop.wait_next_event( TCP_TICK_MS );
-    if ( ret == EventLoop::Result::Exit or _abort ) {
+    if ( ret == TCPEventLoop::Result::Exit or _abort ) {
       break;
     }
 
@@ -79,7 +79,7 @@ void TCPMinnowSocket<AdaptT>::_initialize_TCP( const TCPConfig& config )
   _eventloop.add_rule(
     "receive TCP segment from the network",
     _datagram_adapter.fd(),
-    Direction::In,
+    TCPEventLoop::Direction::In,
     [&] {
       if ( auto seg = _datagram_adapter.read() ) {
         _tcp->receive( std::move( seg.value() ), [&]( auto x ) { _datagram_adapter.write( x ); } );
@@ -98,7 +98,7 @@ void TCPMinnowSocket<AdaptT>::_initialize_TCP( const TCPConfig& config )
   _eventloop.add_rule(
     "push bytes to TCPPeer",
     _thread_data,
-    Direction::In,
+    TCPEventLoop::Direction::In,
     [&] {
       std::string data;
       data.resize( _tcp->outbound_writer().available_capacity() );
@@ -135,7 +135,7 @@ void TCPMinnowSocket<AdaptT>::_initialize_TCP( const TCPConfig& config )
   _eventloop.add_rule(
     "read bytes from inbound stream",
     _thread_data,
-    Direction::Out,
+    TCPEventLoop::Direction::Out,
     [&] {
       Reader& inbound = _tcp->inbound_reader();
       // Write from the inbound_stream into

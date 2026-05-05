@@ -202,3 +202,10 @@ void FileDescriptor::set_blocking( bool blocking )
 
   internal_fd_->non_blocking_ = not blocking;
 }
+
+// Explicit instantiations so that other TUs (e.g. socket.cc) can link to
+// FileDescriptor::CheckSystemCall without being able to see the template body.
+template int FileDescriptor::CheckSystemCall<int>( std::string_view, int ) const;
+template ssize_t FileDescriptor::CheckSystemCall<ssize_t>( std::string_view, ssize_t ) const;
+template int FileDescriptor::FDWrapper::CheckSystemCall<int>( std::string_view, int ) const;
+template ssize_t FileDescriptor::FDWrapper::CheckSystemCall<ssize_t>( std::string_view, ssize_t ) const;
