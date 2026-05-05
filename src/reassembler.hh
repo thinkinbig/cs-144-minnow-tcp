@@ -2,7 +2,8 @@
 
 #include "byte_stream.hh"
 
-#include <set>
+#include <map>
+#include <string>
 
 class Reassembler
 {
@@ -15,20 +16,6 @@ public:
    *   `first_index`: the index of the first byte of the substring
    *   `data`: the substring itself
    *   `is_last_substring`: this substring represents the end of the stream
-   *   `output`: a mutable reference to the Writer
-   *
-   * The Reassembler's job is to reassemble the indexed substrings (possibly out-of-order
-   * and possibly overlapping) back into the original ByteStream. As soon as the Reassembler
-   * learns the next byte in the stream, it should write it to the output.
-   *
-   * If the Reassembler learns about bytes that fit within the stream's available capacity
-   * but can't yet be written (because earlier bytes remain unknown), it should store them
-   * internally until the gaps are filled in.
-   *
-   * The Reassembler should discard any bytes that lie beyond the stream's available capacity
-   * (i.e., bytes that couldn't be written even if earlier gaps get filled in).
-   *
-   * The Reassembler should close the stream after writing the last byte.
    */
   void insert( uint64_t first_index, std::string data, bool is_last_substring );
 
@@ -44,24 +31,18 @@ public:
   const Writer& writer() const { return output_.writer(); }
 
   void set_error() { output_.set_error(); }
-
   bool has_error() const { return output_.has_error(); }
-
   void close() { output_.writer().close(); }
 
 private:
-  struct Segment
-  {
-    uint64_t first_index;
-    std::string data;
-
-    bool operator<( const Segment& other ) const { return first_index < other.first_index; }
-    void merge_with( uint64_t other_index, const std::string& other_data );
-  };
-
-  std::set<Segment> pending_data_ {};
-  uint64_t first_unassembled_index_ {};
-  uint64_t last_byte_index_ {};
-  bool eof_flag_ {};
   ByteStream output_;
+
+  // Pending substrings keyed by their first_index. Invariant: no two entries
+  // overlap or are adjacent — every insertion merges with neighbors.
+  std::map<uint64_t, std::string> pending_ {};
+
+  // Absolute index of the byte that follows the last byte of the stream
+  // (only meaningful once eof_seen_ is true).
+  uint64_t end_index_ {};
+  bool eof_seen_ {};
 };

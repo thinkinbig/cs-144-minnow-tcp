@@ -15,7 +15,7 @@ uint64_t TCPSender::sequence_numbers_in_flight() const
 // This function is for testing only; don't add extra state to support it.
 uint64_t TCPSender::consecutive_retransmissions() const
 {
-  return timer_.consecutive_retransmissions_;
+  return timer_.consecutive_retransmissions();
 }
 
 void TCPSender::fill_payload( TCPSenderMessage& message, uint64_t window_available )
@@ -54,7 +54,7 @@ void TCPSender::send_message( TCPSenderMessage& message, const TransmitFunction&
   outstanding_segments_.push_back( message );
   bytes_in_flight_ += message.sequence_length();
   next_seqno_ += message.sequence_length();
-  if ( !timer_.running_ ) {
+  if ( !timer_.is_running() ) {
     timer_.start();
   }
 }
@@ -138,7 +138,7 @@ void TCPSender::receive( const TCPReceiverMessage& msg )
 
   if ( window_size_ == 0 ) {
     timer_.stop();
-  } else if ( !timer_.running_ ) {
+  } else if ( !timer_.is_running() ) {
     timer_.start();
   }
 
@@ -164,7 +164,7 @@ void TCPSender::receive( const TCPReceiverMessage& msg )
     }
 
     if ( segments_acked ) {
-      timer_.reset();
+      timer_.reset_backoff();
       if ( !outstanding_segments_.empty() ) {
         timer_.start();
       } else {
@@ -176,7 +176,7 @@ void TCPSender::receive( const TCPReceiverMessage& msg )
 
 void TCPSender::tick( uint64_t ms_since_last_tick, const TransmitFunction& transmit )
 {
-  if ( !timer_.running_ ) {
+  if ( !timer_.is_running() ) {
     return;
   }
 
@@ -184,8 +184,7 @@ void TCPSender::tick( uint64_t ms_since_last_tick, const TransmitFunction& trans
 
   if ( timer_.is_expired() && !outstanding_segments_.empty() ) {
     if ( window_size_ > 0 ) {
-      timer_.consecutive_retransmissions_++;
-      timer_.double_RTO();
+      timer_.record_retransmission();
     }
 
     transmit( outstanding_segments_.front() );

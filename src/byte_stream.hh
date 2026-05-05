@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <string_view>
 
@@ -23,8 +24,9 @@ public:
 
 protected:
   // Please add any additional state to the ByteStream here, and not to the Writer and Reader interfaces.
-  std::string buffer_ {};
   uint64_t capacity_ {};
+  std::deque<std::string> segments_ {}; // chain of pushed buffers; front is the next byte to read
+  uint64_t skip_in_front_ {};           // bytes already popped out of segments_.front()
   uint64_t bytes_pushed_ {};
   uint64_t bytes_popped_ {};
   bool error_ {};

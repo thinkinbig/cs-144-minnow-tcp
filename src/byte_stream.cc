@@ -6,12 +6,18 @@ ByteStream::ByteStream( uint64_t capacity ) : capacity_( capacity ) {}
 
 void Writer::push( string data )
 {
-  if ( buffer_.size() == capacity_ ) {
+  if ( data.empty() ) {
     return;
   }
-  size_t len = min( data.size(), available_capacity() );
-  buffer_.insert( buffer_.end(), data.begin(), data.begin() + len );
-  bytes_pushed_ += len;
+  const uint64_t avail = available_capacity();
+  if ( avail == 0 ) {
+    return;
+  }
+  if ( data.size() > avail ) {
+    data.resize( avail );
+  }
+  bytes_pushed_ += data.size();
+  segments_.emplace_back( std::move( data ) );
 }
 
 void Writer::close()
@@ -26,7 +32,7 @@ bool Writer::is_closed() const
 
 uint64_t Writer::available_capacity() const
 {
-  return capacity_ - buffer_.size();
+  return capacity_ - ( bytes_pushed_ - bytes_popped_ );
 }
 
 uint64_t Writer::bytes_pushed() const
@@ -36,27 +42,40 @@ uint64_t Writer::bytes_pushed() const
 
 string_view Reader::peek() const
 {
-  return string_view( buffer_.data(), buffer_.size() );
+  if ( segments_.empty() ) {
+    return {};
+  }
+  return string_view( segments_.front() ).substr( skip_in_front_ );
 }
 
 void Reader::pop( uint64_t len )
 {
-  if ( buffer_.empty() ) {
-    return;
+  const uint64_t buffered = bytes_pushed_ - bytes_popped_;
+  if ( len > buffered ) {
+    len = buffered;
   }
-  len = min( len, buffer_.size() );
-  buffer_.erase( buffer_.begin(), buffer_.begin() + len );
   bytes_popped_ += len;
+  while ( len > 0 ) {
+    const uint64_t front_remaining = segments_.front().size() - skip_in_front_;
+    if ( len >= front_remaining ) {
+      segments_.pop_front();
+      skip_in_front_ = 0;
+      len -= front_remaining;
+    } else {
+      skip_in_front_ += len;
+      len = 0;
+    }
+  }
 }
 
 bool Reader::is_finished() const
 {
-  return buffer_.empty() && closed_;
+  return closed_ && bytes_pushed_ == bytes_popped_;
 }
 
 uint64_t Reader::bytes_buffered() const
 {
-  return buffer_.size();
+  return bytes_pushed_ - bytes_popped_;
 }
 
 uint64_t Reader::bytes_popped() const
