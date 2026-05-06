@@ -8,25 +8,26 @@
 class Reader;
 class Writer;
 
+// A bounded byte stream with separate Writer / Reader views.
+// All bookkeeping lives in the ByteStream base; Reader and Writer are
+// zero-byte derived views (see the static_asserts in byte_stream_helpers.cc).
 class ByteStream
 {
 public:
-  explicit ByteStream( uint64_t capacity );
+  explicit ByteStream( uint64_t capacity ) : capacity_( capacity ) {}
 
-  // Helper functions (provided) to access the ByteStream's Reader and Writer interfaces
   Reader& reader();
   const Reader& reader() const;
   Writer& writer();
   const Writer& writer() const;
 
-  void set_error() { error_ = true; };       // Signal that the stream suffered an error.
-  bool has_error() const { return error_; }; // Has the stream had an error?
+  void set_error() { error_ = true; }
+  bool has_error() const { return error_; }
 
 protected:
-  // Please add any additional state to the ByteStream here, and not to the Writer and Reader interfaces.
-  uint64_t capacity_ {};
+  uint64_t capacity_;
   std::deque<std::string> segments_ {}; // chain of pushed buffers; front is the next byte to read
-  uint64_t skip_in_front_ {};           // bytes already popped out of segments_.front()
+  uint64_t skip_in_front_ {};           // bytes already popped from segments_.front()
   uint64_t bytes_pushed_ {};
   uint64_t bytes_popped_ {};
   bool error_ {};
@@ -36,27 +37,24 @@ protected:
 class Writer : public ByteStream
 {
 public:
-  void push( std::string data ); // Push data to stream, but only as much as available capacity allows.
-  void close();                  // Signal that the stream has reached its ending. Nothing more will be written.
+  void push( std::string data ); // Push data, truncated to available_capacity().
+  void close();                  // Signal end of stream; nothing more will be written.
 
-  bool is_closed() const;              // Has the stream been closed?
-  uint64_t available_capacity() const; // How many bytes can be pushed to the stream right now?
-  uint64_t bytes_pushed() const;       // Total number of bytes cumulatively pushed to the stream
+  bool is_closed() const;
+  uint64_t available_capacity() const;
+  uint64_t bytes_pushed() const;
 };
 
 class Reader : public ByteStream
 {
 public:
-  std::string_view peek() const; // Peek at the next bytes in the buffer
-  void pop( uint64_t len );      // Remove `len` bytes from the buffer
+  std::string_view peek() const; // Peek at the next contiguous run of buffered bytes.
+  void pop( uint64_t len );      // Discard up to `len` buffered bytes from the front.
 
-  bool is_finished() const;        // Is the stream finished (closed and fully popped)?
-  uint64_t bytes_buffered() const; // Number of bytes currently buffered (pushed and not popped)
-  uint64_t bytes_popped() const;   // Total number of bytes cumulatively popped from stream
+  bool is_finished() const;        // Closed and fully drained?
+  uint64_t bytes_buffered() const; // Bytes pushed but not yet popped.
+  uint64_t bytes_popped() const;
 };
 
-/*
- * read: A (provided) helper function thats peeks and pops up to `max_len` bytes
- * from a ByteStream Reader into a string;
- */
+// Peek-and-pop up to `max_len` bytes from `reader` into `out`.
 void read( Reader& reader, uint64_t max_len, std::string& out );

@@ -3,47 +3,50 @@
 #include "exception.hh"
 #include "network_interface.hh"
 
-#include <map>
+#include <memory>
 #include <optional>
+#include <vector>
 
-// \brief A router that has multiple network interfaces and
-// performs longest-prefix-match routing between them.
+// A router holding several NetworkInterfaces and a longest-prefix-match
+// forwarding table. route() drains every interface's input queue and forwards
+// each datagram to the appropriate outgoing interface.
 class Router
 {
 public:
-  // Add an interface to the router
-  // \param[in] interface an already-constructed network interface
-  // \returns The index of the interface after it has been added to the router
+  // Add an interface; returns its index for use with add_route().
   size_t add_interface( std::shared_ptr<NetworkInterface> interface )
   {
     interfaces_.push_back( notnull( "add_interface", std::move( interface ) ) );
     return interfaces_.size() - 1;
   }
 
-  // Access an interface by index
-  std::shared_ptr<NetworkInterface> interface( const size_t N ) { return interfaces_.at( N ); }
+  std::shared_ptr<NetworkInterface> interface( size_t n ) { return interfaces_.at( n ); }
 
-  // Add a route (a forwarding rule)
+  // Install a forwarding rule. `next_hop` is empty for directly-attached
+  // networks, in which case the datagram's destination is used as next-hop.
   void add_route( uint32_t route_prefix,
                   uint8_t prefix_length,
                   std::optional<Address> next_hop,
                   size_t interface_num );
 
-  // Route packets between the interfaces
+  // Forward all currently queued datagrams between interfaces.
   void route();
 
 private:
   struct RouteEntry
   {
-    uint32_t route_prefix;
+    uint32_t prefix;
+    uint8_t prefix_length;
     std::optional<Address> next_hop;
     size_t interface_num;
   };
-  // The router's collection of network interfaces
+
   std::vector<std::shared_ptr<NetworkInterface>> interfaces_ {};
-  std::map<uint8_t, std::vector<RouteEntry>> routes_ {};
 
-  std::optional<RouteEntry> find_route( const uint32_t& destination );
+  // Routes are kept sorted by descending prefix_length, so a linear scan
+  // implements longest-prefix-match.
+  std::vector<RouteEntry> routes_ {};
 
-  void route_datagram( InternetDatagram& datagram, size_t interface_num );
+  const RouteEntry* find_route( uint32_t destination ) const;
+  void forward( InternetDatagram datagram, size_t arrived_on );
 };

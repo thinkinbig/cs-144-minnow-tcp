@@ -1,16 +1,10 @@
 #include "network_interface.hh"
 #include "arp_message.hh"
-#include "debug.hh"
-#include "ethernet_frame.hh"
 #include "exception.hh"
 #include "helpers.hh"
 
-#include <cassert>
-
 using namespace std;
 
-//! \param[in] ethernet_address Ethernet (what ARP calls "hardware") address of the interface
-//! \param[in] ip_address IP (what ARP calls "protocol") address of the interface
 NetworkInterface::NetworkInterface( string_view name,
                                     shared_ptr<OutputPort> port,
                                     const EthernetAddress& ethernet_address,
@@ -19,10 +13,6 @@ NetworkInterface::NetworkInterface( string_view name,
   , port_( notnull( "OutputPort", move( port ) ) )
   , ethernet_address_( ethernet_address )
   , ip_address_( ip_address )
-  , arp_table_()
-  , arp_message_queue_()
-  , initialized_( false )
-  , datagrams_received_()
 {}
 
 void NetworkInterface::initialize()
@@ -30,132 +20,120 @@ void NetworkInterface::initialize()
   if ( initialized_ ) {
     return;
   }
-  arp_message_queue_.set_callback( [this_weak = weak_from_this()]( const Address& next_hop ) {
-    if ( auto this_shared = this_weak.lock() ) {
-      this_shared->send_arp_request( next_hop );
+  arp_queue_.set_callback( [this_weak = weak_from_this()]( const Address& next_hop ) {
+    if ( auto self = this_weak.lock() ) {
+      self->send_arp_request( next_hop );
     }
   } );
   initialized_ = true;
 }
 
-//! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
-void NetworkInterface::tick( const size_t ms_since_last_tick )
+void NetworkInterface::tick( size_t ms_since_last_tick )
 {
-  // Update ARP table
   arp_table_.tick( ms_since_last_tick );
-
-  // Update pending queue
-  arp_message_queue_.tick( ms_since_last_tick );
+  arp_queue_.tick( ms_since_last_tick );
 }
 
-//! \param[in] dgram the IPv4 datagram to be sent
-//! \param[in] next_hop the IP address of the interface to send it to (typically a router or default gateway, but
-//! may also be another host if directly connected to the same network as the destination) Note: the Address type
-//! can be converted to a uint32_t (raw 32-bit IP address) by using the Address::ipv4_numeric() method.
 void NetworkInterface::send_datagram( const InternetDatagram& dgram, const Address& next_hop )
 {
-  if ( arp_table_.lookup( next_hop.ipv4_numeric() ).has_value() ) {
-    send_ipv4_datagram( dgram, next_hop );
-  } else {
-    // Whether there is a pending datagram or not, add the new datagram to the queue
-    bool had_pending = arp_message_queue_.has_pending( next_hop.ipv4_numeric() );
-    arp_message_queue_.add_pending( dgram, next_hop );
-
-    // If there is no pending datagram, it means this is the first request, so send ARP request
-    // If there is a pending datagram, it means ARP request has been sent, wait for timeout retry
-    if ( !had_pending ) {
-      send_arp_request( next_hop );
-    }
+  const uint32_t ip = next_hop.ipv4_numeric();
+  if ( const auto mac = arp_table_.lookup( ip ); mac.has_value() ) {
+    send_ipv4( dgram, *mac );
+    return;
   }
-}
 
-void NetworkInterface::send_arp_request( const Address& next_hop )
-{
-  // Send ARP request
-  ARPMessage arp_request;
-  arp_request.opcode = ARPMessage::OPCODE_REQUEST;
-  arp_request.sender_ethernet_address = ethernet_address_;
-  arp_request.sender_ip_address = ip_address_.ipv4_numeric();
-  arp_request.target_ethernet_address = {};
-  arp_request.target_ip_address = next_hop.ipv4_numeric();
-
-  EthernetFrame frame;
-  frame.header.type = EthernetHeader::TYPE_ARP;
-  frame.header.src = ethernet_address_;
-  frame.header.dst = ETHERNET_BROADCAST;
-  frame.payload = serialize( arp_request );
-  transmit( frame );
-}
-
-void NetworkInterface::send_ipv4_datagram( const InternetDatagram& dgram, const Address& next_hop )
-{
-  // Send IPv4 datagram
-  assert( arp_table_.lookup( next_hop.ipv4_numeric() ).has_value() );
-  EthernetFrame frame;
-  frame.header.type = EthernetHeader::TYPE_IPv4;
-  frame.header.src = ethernet_address_;
-  frame.header.dst = arp_table_.lookup( next_hop.ipv4_numeric() ).value();
-  frame.payload = serialize( dgram );
-  transmit( frame );
-}
-
-void NetworkInterface::confirm_arp_reply( uint32_t ip_addr )
-{
-  // Get all datagrams waiting for this IP
-  auto pending_datagrams = arp_message_queue_.pop_pending( ip_addr );
-
-  // Send all datagrams
-  for ( const auto& pending : pending_datagrams ) {
-    send_ipv4_datagram( pending.dgram, pending.next_hop );
+  // Unknown MAC: queue the datagram. If this is the first request for this IP,
+  // broadcast an ARP query — otherwise an earlier query is still in flight.
+  const bool already_querying = arp_queue_.has_pending( ip );
+  arp_queue_.add_pending( dgram, next_hop );
+  if ( not already_querying ) {
+    send_arp_request( next_hop );
   }
-}
-
-void NetworkInterface::send_arp_reply( const ARPMessage& arp_request )
-{
-  ARPMessage arp_reply;
-  arp_reply.opcode = ARPMessage::OPCODE_REPLY;
-  arp_reply.sender_ethernet_address = ethernet_address_;
-  arp_reply.sender_ip_address = ip_address_.ipv4_numeric();
-  arp_reply.target_ethernet_address = arp_request.sender_ethernet_address;
-  arp_reply.target_ip_address = arp_request.sender_ip_address;
-
-  EthernetFrame frame;
-  frame.header.type = EthernetHeader::TYPE_ARP;
-  frame.header.src = ethernet_address_;
-  frame.header.dst = arp_request.sender_ethernet_address;
-  frame.payload = serialize( arp_reply );
-  transmit( frame );
 }
 
 void NetworkInterface::recv_frame( EthernetFrame frame )
 {
-  // Check if the frame is for us
-  if ( frame.header.dst != ethernet_address_ && frame.header.dst != ETHERNET_BROADCAST ) {
+  if ( frame.header.dst != ethernet_address_ and frame.header.dst != ETHERNET_BROADCAST ) {
     return;
   }
 
-  if ( frame.header.type == EthernetHeader::TYPE_IPv4 ) {
-    InternetDatagram dgram;
-    if ( parse( dgram, frame.payload ) ) {
-      datagrams_received_.push( dgram );
-    }
-  } else if ( frame.header.type == EthernetHeader::TYPE_ARP ) {
-    ARPMessage arp_msg;
-    if ( parse( arp_msg, frame.payload ) ) {
-      // Learn the mapping of the sender
-      arp_table_.add_entry( arp_msg.sender_ip_address, arp_msg.sender_ethernet_address );
-
-      if ( arp_msg.opcode == ARPMessage::OPCODE_REPLY ) {
-        // Received ARP reply, send waiting datagrams
-        confirm_arp_reply( arp_msg.sender_ip_address );
-      } else if ( arp_msg.opcode == ARPMessage::OPCODE_REQUEST ) {
-        if ( arp_msg.target_ip_address == ip_address_.ipv4_numeric() ) {
-          // Send ARP reply if the request is for us
-          send_arp_reply( arp_msg );
-        }
-        // Send waiting datagrams for the sender's IP
-        confirm_arp_reply( arp_msg.sender_ip_address );
+  switch ( frame.header.type ) {
+    case EthernetHeader::TYPE_IPv4: {
+      InternetDatagram dgram;
+      if ( parse( dgram, frame.payload ) ) {
+        datagrams_received_.push( move( dgram ) );
       }
+      return;
     }
+
+    case EthernetHeader::TYPE_ARP: {
+      ARPMessage msg;
+      if ( not parse( msg, frame.payload ) ) {
+        return;
+      }
+      // Either opcode teaches us the sender's mapping.
+      arp_table_.add_entry( msg.sender_ip_address, msg.sender_ethernet_address );
+
+      if ( msg.opcode == ARPMessage::OPCODE_REQUEST and msg.target_ip_address == ip_address_.ipv4_numeric() ) {
+        send_arp_reply( msg );
+      }
+      flush_pending_for( msg.sender_ip_address );
+      return;
+    }
+
+    default:
+      return;
+  }
+}
+
+EthernetFrame NetworkInterface::make_frame( uint16_t type,
+                                            const EthernetAddress& dst,
+                                            vector<Ref<string>> payload ) const
+{
+  EthernetFrame frame;
+  frame.header.type = type;
+  frame.header.src = ethernet_address_;
+  frame.header.dst = dst;
+  frame.payload = move( payload );
+  return frame;
+}
+
+void NetworkInterface::send_ipv4( const InternetDatagram& dgram, const EthernetAddress& dst )
+{
+  transmit( make_frame( EthernetHeader::TYPE_IPv4, dst, serialize( dgram ) ) );
+}
+
+void NetworkInterface::send_arp_request( const Address& next_hop )
+{
+  ARPMessage req;
+  req.opcode = ARPMessage::OPCODE_REQUEST;
+  req.sender_ethernet_address = ethernet_address_;
+  req.sender_ip_address = ip_address_.ipv4_numeric();
+  req.target_ip_address = next_hop.ipv4_numeric();
+  // target_ethernet_address left zero (unknown — that's why we're asking).
+
+  transmit( make_frame( EthernetHeader::TYPE_ARP, ETHERNET_BROADCAST, serialize( req ) ) );
+}
+
+void NetworkInterface::send_arp_reply( const ARPMessage& request )
+{
+  ARPMessage reply;
+  reply.opcode = ARPMessage::OPCODE_REPLY;
+  reply.sender_ethernet_address = ethernet_address_;
+  reply.sender_ip_address = ip_address_.ipv4_numeric();
+  reply.target_ethernet_address = request.sender_ethernet_address;
+  reply.target_ip_address = request.sender_ip_address;
+
+  transmit( make_frame( EthernetHeader::TYPE_ARP, request.sender_ethernet_address, serialize( reply ) ) );
+}
+
+void NetworkInterface::flush_pending_for( uint32_t ip )
+{
+  const auto mac = arp_table_.lookup( ip );
+  if ( not mac.has_value() ) {
+    return;
+  }
+  for ( const auto& pending : arp_queue_.pop_pending( ip ) ) {
+    send_ipv4( pending.dgram, *mac );
   }
 }

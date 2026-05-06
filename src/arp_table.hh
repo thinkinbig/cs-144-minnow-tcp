@@ -1,45 +1,36 @@
 #pragma once
 
-#include "ethernet_frame.hh"
+#include "ethernet_header.hh"
 #include "timer.hh"
+
+#include <cstdint>
 #include <optional>
-#include <ostream>
 #include <unordered_map>
 
+// IP → MAC cache with a per-entry TTL (NetworkTimer::ARP_ENTRY_TIMEOUT).
+// Entries are evicted lazily on lookup() and eagerly on tick().
 class ARPTable
 {
 public:
-  struct ARPEntry
-  {
-    EthernetAddress eth_addr {};
-    NetworkTimer timer { NetworkTimer::ARP_ENTRY_TIMEOUT };
-  };
+  void add_entry( uint32_t ip, const EthernetAddress& mac );
+  void remove_entry( uint32_t ip ) { entries_.erase( ip ); }
 
-  ARPTable() = default;
-  ~ARPTable() = default;
+  // Returns the cached MAC if present and not expired; evicts on expiry.
+  std::optional<EthernetAddress> lookup( uint32_t ip );
 
-  // Add or update entry
-  void add_entry( uint32_t ip_addr, const EthernetAddress& eth_addr );
-
-  // Remove entry
-  void remove_entry( uint32_t ip_addr );
-
-  // Lookup entry (read-while-clear)
-  std::optional<EthernetAddress> lookup( uint32_t ip_addr );
-
-  // Update periodically
   void tick( size_t ms_since_last_tick );
 
-  // Get number of entries
   size_t size() const { return entries_.size(); }
-
-  // Check if empty
   bool empty() const { return entries_.empty(); }
 
-  // Iterator support
   auto begin() const { return entries_.begin(); }
   auto end() const { return entries_.end(); }
 
 private:
-  std::unordered_map<uint32_t, ARPEntry> entries_ {};
+  struct Entry
+  {
+    EthernetAddress mac {};
+    NetworkTimer ttl { NetworkTimer::ARP_ENTRY_TIMEOUT };
+  };
+  std::unordered_map<uint32_t, Entry> entries_ {};
 };

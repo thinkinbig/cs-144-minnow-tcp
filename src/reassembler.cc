@@ -1,5 +1,7 @@
 #include "reassembler.hh"
 
+#include <utility>
+
 using namespace std;
 
 void Reassembler::insert( uint64_t first_index, string data, bool is_last_substring )
@@ -11,12 +13,12 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
     eof_seen_ = true;
   }
 
-  // Clip [first_index, first_index+data.size()) to the acceptable window
-  // [first_unassembled, first_unacceptable).
+  // 1) Clip [first_index, first_index+|data|) to the acceptable window
+  //    [first_unassembled, first_unacceptable).
   const uint64_t first_unassembled = writer.bytes_pushed();
   const uint64_t first_unacceptable = first_unassembled + writer.available_capacity();
 
-  if ( first_index + data.size() <= first_unassembled || first_index >= first_unacceptable ) {
+  if ( first_index >= first_unacceptable or first_index + data.size() <= first_unassembled ) {
     data.clear();
   } else {
     if ( first_index < first_unassembled ) {
@@ -28,21 +30,20 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
     }
   }
 
-  if ( !data.empty() ) {
-    // Merge with the predecessor segment if it touches/overlaps us.
-    auto it = pending_.upper_bound( first_index );
-    if ( it != pending_.begin() ) {
-      auto prev = std::prev( it );
+  if ( not data.empty() ) {
+    // 2) Merge with the immediate predecessor if it touches or overlaps us.
+    auto next = pending_.upper_bound( first_index );
+    if ( next != pending_.begin() ) {
+      auto prev = std::prev( next );
       const uint64_t prev_end = prev->first + prev->second.size();
       if ( prev_end >= first_index ) {
         if ( prev_end >= first_index + data.size() ) {
-          // fully covered by prev — nothing to do
-          data.clear();
+          data.clear(); // fully covered
         } else {
-          // extend prev with the suffix of data beyond prev_end, then absorb
-          // it as the new working segment so we can continue merging right.
+          // Extend prev with our suffix and adopt it as our working segment so
+          // we can keep absorbing successors below.
           const uint64_t overlap = prev_end - first_index;
-          prev->second.append( data, overlap, string::npos );
+          prev->second.append( data, overlap );
           first_index = prev->first;
           data = std::move( prev->second );
           pending_.erase( prev );
@@ -51,27 +52,27 @@ void Reassembler::insert( uint64_t first_index, string data, bool is_last_substr
     }
   }
 
-  if ( !data.empty() ) {
-    // Absorb every successor segment that touches/overlaps us.
+  if ( not data.empty() ) {
+    // 3) Absorb every successor that touches or overlaps us.
     auto it = pending_.lower_bound( first_index );
-    while ( it != pending_.end() && it->first <= first_index + data.size() ) {
+    while ( it != pending_.end() and it->first <= first_index + data.size() ) {
       const uint64_t next_end = it->first + it->second.size();
       if ( next_end > first_index + data.size() ) {
         const uint64_t overlap = first_index + data.size() - it->first;
-        data.append( it->second, overlap, string::npos );
+        data.append( it->second, overlap );
       }
       it = pending_.erase( it );
     }
     pending_.emplace( first_index, std::move( data ) );
   }
 
-  // Flush the contiguous prefix into the output stream.
-  while ( !pending_.empty() && pending_.begin()->first == writer.bytes_pushed() ) {
+  // 4) Flush the contiguous prefix into the output stream.
+  while ( not pending_.empty() and pending_.begin()->first == writer.bytes_pushed() ) {
     auto node = pending_.extract( pending_.begin() );
     writer.push( std::move( node.mapped() ) );
   }
 
-  if ( eof_seen_ && writer.bytes_pushed() == end_index_ ) {
+  if ( eof_seen_ and writer.bytes_pushed() == end_index_ ) {
     writer.close();
   }
 }

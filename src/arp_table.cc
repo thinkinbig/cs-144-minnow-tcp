@@ -1,42 +1,32 @@
 #include "arp_table.hh"
-#include <iomanip>
 
 using namespace std;
 
-void ARPTable::add_entry( uint32_t ip_addr, const EthernetAddress& eth_addr )
+void ARPTable::add_entry( uint32_t ip, const EthernetAddress& mac )
 {
-  auto& entry = entries_[ip_addr];
-  entry.eth_addr = eth_addr;
-  entry.timer.start();
+  auto& entry = entries_[ip];
+  entry.mac = mac;
+  entry.ttl.start();
 }
 
-optional<EthernetAddress> ARPTable::lookup( uint32_t ip_addr )
+optional<EthernetAddress> ARPTable::lookup( uint32_t ip )
 {
-  auto it = entries_.find( ip_addr );
+  const auto it = entries_.find( ip );
   if ( it == entries_.end() ) {
     return nullopt;
   }
-
-  if ( it->second.timer.is_expired() ) {
+  if ( it->second.ttl.is_expired() ) {
     entries_.erase( it );
     return nullopt;
   }
-
-  return it->second.eth_addr;
-}
-
-void ARPTable::remove_entry( uint32_t ip_addr )
-{
-  entries_.erase( ip_addr );
+  return it->second.mac;
 }
 
 void ARPTable::tick( size_t ms_since_last_tick )
 {
   for ( auto it = entries_.begin(); it != entries_.end(); ) {
-    auto& entry = it->second;
-    entry.timer.tick( ms_since_last_tick );
-
-    if ( entry.timer.is_expired() ) {
+    it->second.ttl.tick( ms_since_last_tick );
+    if ( it->second.ttl.is_expired() ) {
       it = entries_.erase( it );
     } else {
       ++it;

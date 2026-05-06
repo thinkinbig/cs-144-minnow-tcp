@@ -1,5 +1,4 @@
 #include "wrapping_integers.hh"
-#include "debug.hh"
 
 using namespace std;
 
@@ -10,23 +9,29 @@ Wrap32 Wrap32::wrap( uint64_t n, Wrap32 zero_point )
 
 uint64_t Wrap32::unwrap( Wrap32 zero_point, uint64_t checkpoint ) const
 {
-  uint32_t offset = raw_value_ - zero_point.raw_value_;
-  uint64_t base = checkpoint & ~uint64_t( UINT32_MAX );
-  uint64_t candidate = base | offset;
+  // Of all absolute seqnos that map to *this, return the one closest to `checkpoint`.
+  // Strategy: build the candidate that shares `checkpoint`'s upper 32 bits, then check
+  // its ±2^32 neighbours and pick whichever is nearest.
+  constexpr uint64_t kRound = 1ULL << 32;
 
-  uint64_t next_round = candidate + ( uint64_t( UINT32_MAX ) + 1 );
-  uint64_t prev_round
-    = ( candidate >= ( uint64_t( UINT32_MAX ) + 1 ) ) ? candidate - ( uint64_t( UINT32_MAX ) + 1 ) : candidate;
+  const uint32_t offset = raw_value_ - zero_point.raw_value_;
+  const uint64_t candidate = ( checkpoint & ~static_cast<uint64_t>( UINT32_MAX ) ) | offset;
 
-  int64_t dist_curr = abs( int64_t( candidate - checkpoint ) );
-  int64_t dist_next = abs( int64_t( next_round - checkpoint ) );
-  int64_t dist_prev = abs( int64_t( prev_round - checkpoint ) );
+  auto distance = [checkpoint]( uint64_t v ) { return v > checkpoint ? v - checkpoint : checkpoint - v; };
 
-  if ( dist_next < dist_curr && dist_next < dist_prev ) {
-    return next_round;
+  uint64_t best = candidate;
+  uint64_t best_dist = distance( candidate );
+
+  if ( candidate >= kRound ) {
+    const uint64_t prev = candidate - kRound;
+    if ( distance( prev ) < best_dist ) {
+      best = prev;
+      best_dist = distance( prev );
+    }
   }
-  if ( dist_prev < dist_curr && dist_prev < dist_next ) {
-    return prev_round;
+  const uint64_t next = candidate + kRound;
+  if ( distance( next ) < best_dist ) {
+    best = next;
   }
-  return candidate;
+  return best;
 }

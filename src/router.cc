@@ -1,90 +1,70 @@
 #include "router.hh"
-#include "debug.hh"
+
+#include <algorithm>
+#include <functional>
 
 using namespace std;
 
-// route_prefix: The "up-to-32-bit" IPv4 address prefix to match the datagram's destination address against
-// prefix_length: For this route to be applicable, how many high-order (most-significant) bits of
-//    the route_prefix will need to match the corresponding bits of the datagram's destination address?
-// next_hop: The IP address of the next hop. Will be empty if the network is directly attached to the router (in
-//    which case, the next hop address should be the datagram's final destination).
-// interface_num: The index of the interface to send the datagram out on.
-void Router::add_route( const uint32_t route_prefix,
-                        const uint8_t prefix_length,
-                        const optional<Address> next_hop,
-                        const size_t interface_num )
+void Router::add_route( uint32_t route_prefix,
+                        uint8_t prefix_length,
+                        optional<Address> next_hop,
+                        size_t interface_num )
 {
-
   if ( prefix_length > 32 ) {
     return;
   }
-
-  RouteEntry route_entry = { route_prefix, next_hop, interface_num };
-  routes_[prefix_length].push_back( route_entry );
+  // Insert preserving descending order on prefix_length so find_route() can
+  // stop at the first match.
+  RouteEntry entry { route_prefix, prefix_length, next_hop, interface_num };
+  const auto pos = std::ranges::upper_bound(
+    routes_, prefix_length, std::ranges::greater {}, &RouteEntry::prefix_length );
+  routes_.insert( pos, entry );
 }
 
-// Go through all the interfaces, and route every incoming datagram to its proper outgoing interface.
+const Router::RouteEntry* Router::find_route( uint32_t destination ) const
+{
+  for ( const auto& r : routes_ ) {
+    // A prefix length of 0 matches anything; otherwise, mask off the low bits.
+    const uint32_t mask = r.prefix_length == 0 ? 0 : ( ~uint32_t { 0 } << ( 32 - r.prefix_length ) );
+    if ( ( destination & mask ) == ( r.prefix & mask ) ) {
+      return &r;
+    }
+  }
+  return nullptr;
+}
+
 void Router::route()
 {
-  // Iterate through all interfaces
-  for ( size_t i = 0; i < interfaces_.size(); i++ ) {
-    auto& interface = interfaces_[i];
-    // Get all datagrams received on this interface
-    auto& datagrams = interface->datagrams_received();
-    // Process all datagrams on this interface
-    while ( !datagrams.empty() ) {
-      InternetDatagram datagram = move( datagrams.front() );
-      datagrams.pop();
-      route_datagram( datagram, i );
+  for ( size_t i = 0; i < interfaces_.size(); ++i ) {
+    auto& queue = interfaces_[i]->datagrams_received();
+    while ( not queue.empty() ) {
+      forward( move( queue.front() ), i );
+      queue.pop();
     }
   }
 }
 
-optional<Router::RouteEntry> Router::find_route( const uint32_t& destination )
+void Router::forward( InternetDatagram datagram, size_t arrived_on )
 {
-
-  for ( int prefix_length = 32; prefix_length >= 0; prefix_length-- ) {
-    auto it = routes_.find( prefix_length );
-    if ( it != routes_.end() ) {
-      for ( const auto& route : it->second ) {
-        uint32_t mask = ( prefix_length == 32 ) ? 0xFFFFFFFF : ~( 0xFFFFFFFF >> prefix_length );
-        uint32_t dest_masked = destination & mask;
-        uint32_t route_masked = route.route_prefix & mask;
-
-        if ( dest_masked == route_masked ) {
-          return route;
-        }
-      }
-    }
-  }
-  return nullopt;
-}
-
-void Router::route_datagram( InternetDatagram& datagram, size_t interface_num )
-{
-  uint32_t destination = datagram.header.dst;
-  auto route = find_route( destination );
-  if ( !route ) {
-    return; // Drop datagram if no route found
-  }
-
-  // Check if the route would send the datagram back to the interface it came from
-  // Only prevent routing loop when forwarding to a different subnet
-  if ( route->interface_num == interface_num && route->next_hop.has_value() ) {
-    return; // Drop datagram to prevent routing loop
-  }
-
-  // Check TTL
   if ( datagram.header.ttl <= 1 ) {
     return;
   }
-  datagram.header.ttl--;
+
+  const RouteEntry* route = find_route( datagram.header.dst );
+  if ( route == nullptr ) {
+    return;
+  }
+
+  // Don't bounce a datagram back through the interface it arrived on if the
+  // route would also need an ARP step (i.e., it's not a directly-attached host).
+  if ( route->interface_num == arrived_on and route->next_hop.has_value() ) {
+    return;
+  }
+
+  --datagram.header.ttl;
   datagram.header.compute_checksum();
 
-  // Calculate next hop address
-  Address nexthop
-    = route->next_hop.has_value() ? *route->next_hop : Address::from_ipv4_numeric( datagram.header.dst );
-
-  // Send through the interface specified by the route
-  interfaces_[route->interface_num]->send_datagram( datagram, nexthop );
+  const Address next_hop
+    = route->next_hop.value_or( Address::from_ipv4_numeric( datagram.header.dst ) );
+  interfaces_[route->interface_num]->send_datagram( datagram, next_hop );
 }

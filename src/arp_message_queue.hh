@@ -1,68 +1,46 @@
 #pragma once
 
 #include "address.hh"
-#include "ethernet_frame.hh"
 #include "ipv4_datagram.hh"
 #include "timer.hh"
 
+#include <cstdint>
 #include <functional>
-#include <memory>
-#include <optional>
 #include <unordered_map>
+#include <vector>
 
+// Per-IP queue of IPv4 datagrams that are waiting on an outstanding ARP request.
+// When the head of a queue ages past ARP_REQUEST_TIMEOUT, the entire queue is
+// dropped and the registered callback is invoked so the caller can re-broadcast.
 class ARPMessageQueue
 {
 public:
-  // Datagram waiting for ARP reply
   struct PendingDatagram
   {
     InternetDatagram dgram {};
     Address next_hop { "0.0.0.0", 0 };
-    NetworkTimer timer { NetworkTimer::ARP_REQUEST_TIMEOUT }; // 5 seconds timeout
+    NetworkTimer timer { NetworkTimer::ARP_REQUEST_TIMEOUT };
   };
 
-  // Pending queue for each IP address
-  using PendingQueue = std::vector<PendingDatagram>;
-  using ARPRequestCallback = std::function<void(const Address&)>;
+  using TimeoutCallback = std::function<void( const Address& )>;
 
-  // Default constructor
   ARPMessageQueue() = default;
+  explicit ARPMessageQueue( TimeoutCallback cb ) : on_timeout_( std::move( cb ) ) {}
 
-  // Constructor with observer
-  explicit ARPMessageQueue( ARPRequestCallback callback ) : callback_( std::move(callback) ) {}
+  void set_callback( TimeoutCallback cb ) { on_timeout_ = std::move( cb ); }
 
-  ~ARPMessageQueue() = default;
-
-  // Add a pending datagram
   void add_pending( const InternetDatagram& dgram, const Address& next_hop );
+  std::vector<PendingDatagram> pop_pending( uint32_t ip );
+  bool has_pending( uint32_t ip ) const;
 
-  // Get and remove all pending datagrams for the specified IP address
-  std::vector<PendingDatagram> pop_pending( uint32_t ip_addr );
-
-  // Check if there are pending ARP replies for a specific IP
-  bool has_pending( uint32_t ip_addr ) const;
-
-  // Update timers
+  // Advance per-IP head timers; on expiry, drop the queue and notify the
+  // callback so it can resend the ARP request.
   void tick( size_t ms_since_last_tick );
 
-  // Get number of pending datagrams
-  size_t size() const
-  {
-    size_t total = 0;
-    for ( const auto& [_, queue] : pending_ ) {
-      total += queue.size();
-    }
-    return total;
-  }
-
-  // Check if empty
+  size_t size() const;
   bool empty() const { return pending_.empty(); }
 
-  // Set timeout observer
-  void set_callback( ARPRequestCallback callback ) { callback_ = std::move(callback); }
-
-
 private:
-  std::unordered_map<uint32_t, PendingQueue> pending_ {};
-  ARPRequestCallback callback_ {};
+  std::unordered_map<uint32_t, std::vector<PendingDatagram>> pending_ {};
+  TimeoutCallback on_timeout_ {};
 };

@@ -1,56 +1,61 @@
 #include "arp_message_queue.hh"
-#include <algorithm>
-#include <vector>
 
 using namespace std;
 
 void ARPMessageQueue::add_pending( const InternetDatagram& dgram, const Address& next_hop )
 {
-  uint32_t ip = next_hop.ipv4_numeric();
-
-  // Add to queue
-  PendingDatagram pending;
+  auto& queue = pending_[next_hop.ipv4_numeric()];
+  auto& pending = queue.emplace_back();
   pending.dgram = dgram;
   pending.next_hop = next_hop;
   pending.timer.start();
-  pending_[ip].push_back( move( pending ) );
 }
 
-vector<ARPMessageQueue::PendingDatagram> ARPMessageQueue::pop_pending( uint32_t ip_addr )
+vector<ARPMessageQueue::PendingDatagram> ARPMessageQueue::pop_pending( uint32_t ip )
 {
-  auto it = pending_.find( ip_addr );
+  const auto it = pending_.find( ip );
   if ( it == pending_.end() ) {
     return {};
   }
-
-  vector<PendingDatagram> result = move( it->second );
+  vector<PendingDatagram> out = move( it->second );
   pending_.erase( it );
-  return result;
+  return out;
 }
 
-bool ARPMessageQueue::has_pending( uint32_t ip_addr ) const
+bool ARPMessageQueue::has_pending( uint32_t ip ) const
 {
-  auto it = pending_.find( ip_addr );
-  return it != pending_.end() && !it->second.empty();
+  const auto it = pending_.find( ip );
+  return it != pending_.end() and not it->second.empty();
 }
 
 void ARPMessageQueue::tick( size_t ms_since_last_tick )
 {
-  // Iterate through all pending queues
   for ( auto it = pending_.begin(); it != pending_.end(); ) {
-    // Update the timer of the first datagram in the queue
-    // If the first one is expired, the whole queue is expired
-    if ( !it->second.empty() ) {
-      it->second.front().timer.tick( ms_since_last_tick );
-      if ( it->second.front().timer.is_expired() ) {
-        // Send a new ARP request and remove the queue
-        if ( callback_ ) {
-          callback_( it->second.front().next_hop );
-        }
-        it = pending_.erase( it );
-        continue;
-      }
+    if ( it->second.empty() ) {
+      it = pending_.erase( it );
+      continue;
     }
-    ++it;
+    // Only the head datagram's timer matters: enqueueing later datagrams
+    // doesn't reset the outstanding ARP request, so the queue ages with its head.
+    auto& head = it->second.front();
+    head.timer.tick( ms_since_last_tick );
+    if ( head.timer.is_expired() ) {
+      const Address next_hop = head.next_hop;
+      it = pending_.erase( it );
+      if ( on_timeout_ ) {
+        on_timeout_( next_hop );
+      }
+    } else {
+      ++it;
+    }
   }
+}
+
+size_t ARPMessageQueue::size() const
+{
+  size_t total = 0;
+  for ( const auto& [_, queue] : pending_ ) {
+    total += queue.size();
+  }
+  return total;
 }
