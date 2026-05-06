@@ -45,7 +45,8 @@ void serve_client( TCPSocket client )
       read_buffer.append( chunk );
 
       Message msg;
-      while ( try_parse_message( read_buffer, msg ) ) {
+      ParseResult r = ParseResult::NeedMore;
+      while ( ( r = try_parse_message( read_buffer, msg ) ) == ParseResult::Ok ) {
         std::cout << "[server] received from " << peer << ": " << msg.body << "\n";
         const Message reply = handle_message( msg );
         write_buffer.append( encode_message( reply ) );
@@ -53,6 +54,9 @@ void serve_client( TCPSocket client )
           closing = true;
           break;
         }
+      }
+      if ( r == ParseResult::Invalid ) {
+        throw std::runtime_error( "malformed frame from " + peer );
       }
 
       while ( !write_buffer.empty() ) {

@@ -29,8 +29,14 @@ void send_message( TCPSocket& sock, const Message& msg )
 bool recv_one_message( TCPSocket& sock, std::string& read_buffer, Message& out )
 {
   while ( true ) {
-    if ( try_parse_message( read_buffer, out ) ) {
-      return true;
+    switch ( try_parse_message( read_buffer, out ) ) {
+      case ParseResult::Ok:
+        return true;
+      case ParseResult::Invalid:
+        std::cerr << "[client] malformed frame from server\n";
+        return false;
+      case ParseResult::NeedMore:
+        break;
     }
     std::string chunk;
     sock.read( chunk );

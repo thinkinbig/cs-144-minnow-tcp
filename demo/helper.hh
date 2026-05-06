@@ -22,6 +22,19 @@ struct Message
   std::string body {};
 };
 
+// Outcome of a single try_parse_message call.
+//   Ok       -- consumed one complete message, buffer advanced
+//   NeedMore -- header or body incomplete; keep reading
+//   Invalid  -- header decoded but length > kMaxMessageSize; the stream is
+//               unrecoverable and the caller should drop the connection
+//               rather than letting the read buffer grow without bound.
+enum class ParseResult : uint8_t
+{
+  Ok,
+  NeedMore,
+  Invalid,
+};
+
 // Per-connection buffers used by the event-loop server. The blocking server
 // keeps its own buffers on the stack and doesn't need this struct.
 struct ConnBuffers
@@ -47,11 +60,11 @@ inline std::string encode_message( const Message& msg )
   return out;
 }
 
-inline bool try_parse_message( std::string& buffer, Message& msg )
+inline ParseResult try_parse_message( std::string& buffer, Message& msg )
 {
   constexpr size_t header_size = sizeof( uint32_t ) * 2;
   if ( buffer.size() < header_size ) {
-    return false;
+    return ParseResult::NeedMore;
   }
 
   uint32_t type_net = 0;
@@ -63,16 +76,16 @@ inline bool try_parse_message( std::string& buffer, Message& msg )
   const uint32_t len = ntohl( len_net );
 
   if ( len > kMaxMessageSize ) {
-    return false;
+    return ParseResult::Invalid;
   }
   if ( buffer.size() < header_size + len ) {
-    return false;
+    return ParseResult::NeedMore;
   }
 
   msg.type = static_cast<MessageType>( type );
   msg.body.assign( buffer.data() + header_size, len );
   buffer.erase( 0, header_size + len );
-  return true;
+  return ParseResult::Ok;
 }
 
 inline Message handle_message( const Message& msg )

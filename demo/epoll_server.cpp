@@ -41,13 +41,19 @@ void on_readable( Conn& conn )
   }
 
   Message msg;
-  while ( try_parse_message( conn.buf.read_buffer, msg ) ) {
+  ParseResult r = ParseResult::NeedMore;
+  while ( ( r = try_parse_message( conn.buf.read_buffer, msg ) ) == ParseResult::Ok ) {
     const Message reply = handle_message( msg );
     conn.buf.write_buffer.append( encode_message( reply ) );
     if ( msg.type == MessageType::Quit ) {
       conn.buf.close_after_write = true;
       break;
     }
+  }
+  if ( r == ParseResult::Invalid ) {
+    std::cerr << "[epoll-server] malformed frame, dropping connection (fd=" << conn.socket.fd_num() << ")\n";
+    conn.buf.write_buffer.clear();
+    conn.socket.close();
   }
 }
 
