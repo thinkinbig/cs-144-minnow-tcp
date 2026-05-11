@@ -8,7 +8,7 @@
 //   - Workers join on pool destruction → no detached threads escaping.
 
 #include "address.hh"
-#include "helper.hh"
+#include "server_handler.hh"
 #include "socket.hh"
 #include "worker_pool.hh"
 

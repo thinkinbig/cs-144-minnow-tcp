@@ -5,7 +5,7 @@
 // prints the server's reply.
 
 #include "address.hh"
-#include "helper.hh"
+#include "protocol.hh"
 #include "socket.hh"
 
 #include <iostream>

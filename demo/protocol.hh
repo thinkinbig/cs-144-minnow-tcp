@@ -3,7 +3,6 @@
 #include <arpa/inet.h>
 #include <cstdint>
 #include <cstring>
-#include <ctime>
 #include <string>
 
 inline constexpr uint32_t kMaxMessageSize = 1024 * 1024;
@@ -33,15 +32,6 @@ enum class ParseResult : uint8_t
   Ok,
   NeedMore,
   Invalid,
-};
-
-// Per-connection buffers used by the event-loop server. The blocking server
-// keeps its own buffers on the stack and doesn't need this struct.
-struct ConnBuffers
-{
-  std::string read_buffer {};
-  std::string write_buffer {};
-  bool close_after_write { false };
 };
 
 inline std::string encode_message( const Message& msg )
@@ -86,19 +76,4 @@ inline ParseResult try_parse_message( std::string& buffer, Message& msg )
   msg.body.assign( buffer.data() + header_size, len );
   buffer.erase( 0, header_size + len );
   return ParseResult::Ok;
-}
-
-inline Message handle_message( const Message& msg )
-{
-  if ( msg.type == MessageType::Echo ) {
-    return Message { MessageType::Echo, msg.body };
-  }
-  if ( msg.type == MessageType::Time ) {
-    const std::time_t now = std::time( nullptr );
-    return Message { MessageType::Time, std::ctime( &now ) };
-  }
-  if ( msg.type == MessageType::Quit ) {
-    return Message { MessageType::Quit, "bye" };
-  }
-  return Message { MessageType::Error, "unknown message type" };
 }
